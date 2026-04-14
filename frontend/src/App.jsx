@@ -3,6 +3,15 @@ import './App.css';
 import ActiveTrades from './ActiveTrades';
 import { motion } from 'framer-motion';
 import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+// --- MOCK TREND ENGINE ---
+const generateMockHistory = (currentPrice) => {
+  let price = currentPrice * 0.85; // Start the graph slightly lower
+  return Array.from({ length: 30 }).map((_, i) => {
+    // Add a random daily fluctuation (up or down)
+    price += (Math.random() - 0.45) * (currentPrice * 0.03); 
+    return { day: i + 1, price: parseFloat(price.toFixed(2)) };
+  });
+};
 function App() {
   // --- Standard States ---
   const [balanceData, setBalanceData] = useState(null);
@@ -56,17 +65,34 @@ function App() {
     fetchData();
   }, []);
 
-  // Mode 1: Market Radar Function
+ // Mode 1: Market Radar Function
   const handleResearch = async (e) => { 
     e.preventDefault(); 
     if (!researchQuery) return; 
     setIsResearchLoading(true); 
     setResearchResult(null); 
     try { 
-      const response = await fetch('https://legacy-ledger.onrender.com/api/ai/research', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: researchQuery, currentBalance: balanceData ? balanceData.netBalance : 0 }) }); 
+      const response = await fetch('https://legacy-ledger.onrender.com/api/ai/research', { 
+        method: 'POST', 
+        headers: { 'Content-Type': 'application/json' }, 
+        body: JSON.stringify({ query: researchQuery, currentBalance: balanceData ? balanceData.netBalance : 0 }) 
+      }); 
       const result = await response.json(); 
-      if (response.ok) { setResearchResult(result.data); } else { alert(result.message); } 
-    } catch (error) { alert("Market connection lost."); } 
+      
+      // --- THE STEP 3 UPDATE IS HERE ---
+      if (response.ok) { 
+        setResearchResult({
+          ...result.data,
+          history: generateMockHistory(result.data.price) // Attaching the 30-day trend!
+        }); 
+      } else { 
+        alert(result.message); 
+      } 
+      // ---------------------------------
+
+    } catch (error) { 
+      alert("Market connection lost."); 
+    } 
     setIsResearchLoading(false); 
     setResearchQuery(''); 
   };
@@ -179,7 +205,21 @@ function App() {
                 </span>
               </div>
             </div>
-
+{/* RADAR SCATTER PLOT */}
+            <div style={{ width: '100%', height: '150px', marginBottom: '15px' }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <ScatterChart margin={{ top: 5, right: 5, bottom: 5, left: 5 }}>
+                  <XAxis dataKey="day" type="number" hide domain={['dataMin', 'dataMax']} />
+                  <YAxis dataKey="price" type="number" hide domain={['auto', 'auto']} />
+                  <Tooltip 
+                    cursor={{ strokeDasharray: '3 3' }} 
+                    contentStyle={{ backgroundColor: '#121212', border: '1px solid #444', borderRadius: '8px', color: '#fff' }}
+                    formatter={(value) => [`₹${value}`, 'Price']}
+                  />
+                  <Scatter name="Trend" data={researchResult.history} fill={researchResult.change >= 0 ? '#4ade80' : '#f87171'} />
+                </ScatterChart>
+              </ResponsiveContainer>
+            </div>
             <p style={{ fontStyle: 'italic', margin: 0, color: '#d4d4d4', whiteSpace: 'pre-line', lineHeight: '1.6', backgroundColor: '#1e1e1e', padding: '15px', borderRadius: '8px', border: '1px solid #444' }}>{researchResult.analysis}</p>
 
             <motion.button 
@@ -284,16 +324,36 @@ function App() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
               {Array.isArray(discoveryResults) ? discoveryResults.map((stock, index) => (
                 <motion.div key={index} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: index * 0.1 }} className="stock-card" style={{ padding: '15px', backgroundColor: '#1e1e1e', borderRadius: '8px', border: '1px solid #333' }}>
+                  
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <h4 style={{ margin: 0, color: '#60a5fa', fontSize: '1.1rem' }}>{stock.company} <span style={{color: '#888', fontSize: '0.9rem'}}>({stock.ticker})</span></h4>
                     <span style={{ fontWeight: 'bold', fontSize: '1.2rem', color: '#fff' }}>₹{stock.price.toFixed(2)}</span>
                   </div>
+
+                  {/* --- MOCK HISTORY SCATTER PLOT INJECTED HERE --- */}
+                  <div style={{ width: '100%', height: '80px', marginTop: '10px' }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <ScatterChart margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
+                        <XAxis dataKey="day" type="number" hide domain={['dataMin', 'dataMax']} />
+                        <YAxis dataKey="price" type="number" hide domain={['auto', 'auto']} />
+                        <Tooltip 
+                          cursor={false}
+                          contentStyle={{ backgroundColor: '#121212', border: '1px solid #444', borderRadius: '8px', color: '#fff', fontSize: '0.8rem' }}
+                        />
+                        <Scatter data={stock.history} fill="#60a5fa" />
+                      </ScatterChart>
+                    </ResponsiveContainer>
+                  </div>
+                  {/* ----------------------------------------------- */}
+
                   <p style={{ fontSize: '0.95rem', color: '#ccc', margin: '10px 0', lineHeight: '1.5' }}>{stock.reason}</p>
+                  
                   <div style={{ backgroundColor: '#2d2d2d', padding: '10px', borderRadius: '5px', textAlign: 'center', border: '1px solid #4ade80' }}>
                     <span style={{ color: '#4ade80', fontWeight: 'bold', fontSize: '1.1rem' }}>
                       Affordable: {stock.quantity} Shares
                     </span>
                   </div>
+
                 </motion.div>
               )) : (
                 <p style={{ lineHeight: '1.7', whiteSpace: 'pre-line', color: '#e5e5e5', margin: 0 }}>{discoveryResults}</p>
