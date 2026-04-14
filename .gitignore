@@ -1,1 +1,14 @@
+# Master Ignore List
+
+# Passwords & Secrets
 .env
+backend/.env
+frontend/.env
+
+# Heavy Node Folders
+node_modules/
+backend/node_modules/
+frontend/node_modules/
+
+# Build Output
+frontend/dist/
