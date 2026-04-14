@@ -28,21 +28,21 @@ function App() {
     const fetchData = async () => {
       try {
         // 1. Fetch Balance
-        const balanceRes = await fetch('http://localhost:5000/api/transactions/balance/1');
+        const balanceRes = await fetch('http://legacy-ledger.onrender.com/api/transactions/balance/1');
         if (balanceRes.ok) {
           const data = await balanceRes.json();
           setBalanceData(data);
         }
 
         // 2. Fetch Transactions
-        const transRes = await fetch('http://localhost:5000/api/transactions/1');
+        const transRes = await fetch('http://legacy-ledger.onrender.com/api/transactions/1');
         if (transRes.ok) {
           const data = await transRes.json();
           setTransactions(Array.isArray(data) ? data : []);
         }
 
         // 3. Fetch Goals
-        const goalsRes = await fetch('http://localhost:5000/api/goals/1');
+        const goalsRes = await fetch('http://legacy-ledger.onrender.com/api/goals/1');
         if (goalsRes.ok) {
           const data = await goalsRes.json();
           setGoals(Array.isArray(data) ? data : []);
@@ -62,7 +62,7 @@ function App() {
     setIsResearchLoading(true); 
     setResearchResult(null); 
     try { 
-      const response = await fetch('http://localhost:5000/api/ai/research', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: researchQuery, currentBalance: balanceData ? balanceData.netBalance : 0 }) }); 
+      const response = await fetch('http://legacy-ledger.onrender.com/api/ai/research', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: researchQuery, currentBalance: balanceData ? balanceData.netBalance : 0 }) }); 
       const result = await response.json(); 
       if (response.ok) { setResearchResult(result.data); } else { alert(result.message); } 
     } catch (error) { alert("Market connection lost."); } 
@@ -76,13 +76,13 @@ function App() {
     if (!smartInput) return; 
     setIsSmartLoading(true); 
     try { 
-      const aiResponse = await fetch('http://localhost:5000/api/ai/smart-entry', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ rawText: smartInput }) }); 
+      const aiResponse = await fetch('http://legacy-ledger.onrender.com/api/ai/smart-entry', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ rawText: smartInput }) }); 
       const aiResult = await aiResponse.json(); 
       const ext = aiResult.data; 
-      const saveResponse = await fetch('http://localhost:5000/api/transactions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user_id: 1, type: ext.type, amount: ext.amount, category: ext.category, description: ext.description }) }); 
+      const saveResponse = await fetch('http://legacy-ledger.onrender.com/api/transactions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user_id: 1, type: ext.type, amount: ext.amount, category: ext.category, description: ext.description }) }); 
       if (saveResponse.ok) { 
-        fetch('http://localhost:5000/api/transactions/balance/1').then(res => res.json()).then(data => setBalanceData(data)); 
-        fetch('http://localhost:5000/api/transactions/1').then(res => res.json()).then(data => setTransactions(data)); 
+        fetch('http://legacy-ledger.onrender.com/api/transactions/balance/1').then(res => res.json()).then(data => setBalanceData(data)); 
+        fetch('http://legacy-ledger.onrender.com/api/transactions/1').then(res => res.json()).then(data => setTransactions(data)); 
         setSmartInput(''); 
       } 
     } catch (error) { alert("Error parsing transaction."); } 
@@ -101,7 +101,7 @@ function App() {
     const finalAnswers = overrideAnswers || discoveryAnswers;
     
     try {
-      const response = await fetch('http://localhost:5000/api/ai/discover', {
+      const response = await fetch('http://legacy-ledger.onrender.com/api/ai/discover', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(finalAnswers)

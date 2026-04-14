@@ -5,7 +5,7 @@ const ActiveTrades = () => {
 
   useEffect(() => {
     // Fetching the live data from your new backend route!
-    fetch('http://localhost:5000/api/investments')
+   fetch('https://legacy-ledger.onrender.com/api/transactions')
       .then(res => {
         // SAFETY NET 1: If the server throws a 500 error, stop here!
         if (!res.ok) throw new Error("Server error");
