@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import './App.css';
 import ActiveTrades from './ActiveTrades';
-
+import { motion } from 'framer-motion';
+import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 function App() {
   // --- Standard States ---
   const [balanceData, setBalanceData] = useState(null);
@@ -105,16 +106,12 @@ function App() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(finalAnswers)
-      });
-      
-      const data = await response.json();
+      });   const data = await response.json();
 
-      // --- THE NEW SHIELD ---
-      // If Gemini is busy, alert the user and reset the UI!
       if (!response.ok) {
         alert("Gemini is currently caught in global traffic! Please wait a moment and try again.");
         setAdvisorStep(0);
-        return; // Stop running the function here
+        return; 
       }
 
       setDiscoveryResults(data.recommendations);
@@ -132,32 +129,46 @@ function App() {
     setDiscoveryResults(null);
   };
 
+  // Upgraded Framer Motion Button Component
   const StepButton = ({ label, onClick }) => (
-    <button onClick={onClick} style={{ padding: '12px 20px', backgroundColor: '#333', color: 'white', border: '1px solid #555', borderRadius: '8px', cursor: 'pointer', flex: 1, fontSize: '1rem', transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)' }} onMouseOver={e => {e.target.style.backgroundColor = '#60a5fa'; e.target.style.color = '#121212'; e.target.style.transform = 'scale(1.02)';}} onMouseOut={e => {e.target.style.backgroundColor = '#333'; e.target.style.color = 'white'; e.target.style.transform = 'scale(1)';}}>
+    <motion.button 
+      onClick={onClick} 
+      whileHover={{ scale: 1.02, backgroundColor: '#60a5fa', color: '#121212' }}
+      whileTap={{ scale: 0.95 }}
+      style={{ padding: '12px 20px', backgroundColor: '#333', color: 'white', border: '1px solid #555', borderRadius: '8px', cursor: 'pointer', flex: 1, fontSize: '1rem', transition: 'background-color 0.2s, color 0.2s' }} 
+    >
       {label}
-    </button>
+    </motion.button>
   );
 
   return (
     <div className="dashboard-container" style={{ maxWidth: '800px', margin: '0 auto', padding: '40px', fontFamily: 'sans-serif' }}>
       
-      <div style={{ textAlign: 'center', marginBottom: '40px' }}>
+      <motion.div 
+        initial={{ opacity: 0, y: -20 }} 
+        animate={{ opacity: 1, y: 0 }} 
+        transition={{ duration: 0.6 }}
+        style={{ textAlign: 'center', marginBottom: '40px' }}
+      >
         <h1 style={{ fontSize: '2.5rem', marginBottom: '5px' }}>Legacy Ledger</h1>
         <p style={{ color: '#888' }}>Welcome to your financial dashboard!</p>
-      </div>
+      </motion.div>
 
       {/* --- MODE 1: ON-DEMAND RADAR --- */}
-      <div style={{ backgroundColor: '#1e1e1e', padding: '20px', borderRadius: '15px', marginBottom: '20px', boxShadow: '0 4px 6px rgba(0,0,0,0.3)', border: '1px solid #444' }}>
+      <motion.div 
+        initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.1 }}
+        style={{ backgroundColor: '#1e1e1e', padding: '20px', borderRadius: '15px', marginBottom: '20px', boxShadow: '0 4px 6px rgba(0,0,0,0.3)', border: '1px solid #444' }}
+      >
         <h2 style={{ margin: '0 0 15px 0', color: '#a3a3a3', fontSize: '1.2rem', textTransform: 'uppercase', letterSpacing: '1px' }}>📡 On-Demand Analysis</h2>
         <form onSubmit={handleResearch} style={{ display: 'flex', gap: '10px' }}>
           <input type="text" value={researchQuery} onChange={(e) => setResearchQuery(e.target.value)} placeholder="Analyze specific stock (e.g., Tata Motors)..." style={{ flex: 1, padding: '12px', borderRadius: '8px', border: '1px solid #444', backgroundColor: '#121212', color: 'white', fontSize: '1rem' }} />
-          <button type="submit" disabled={isResearchLoading} style={{ padding: '12px 24px', backgroundColor: '#facc15', color: '#121212', fontWeight: 'bold', border: 'none', borderRadius: '8px', cursor: isResearchLoading ? 'not-allowed' : 'pointer' }}>
+          <motion.button type="submit" disabled={isResearchLoading} whileHover={!isResearchLoading ? { scale: 1.05 } : {}} whileTap={!isResearchLoading ? { scale: 0.95 } : {}} style={{ padding: '12px 24px', backgroundColor: '#facc15', color: '#121212', fontWeight: 'bold', border: 'none', borderRadius: '8px', cursor: isResearchLoading ? 'not-allowed' : 'pointer' }}>
             {isResearchLoading ? 'Scanning...' : 'Analyze'}
-          </button>
+          </motion.button>
         </form>
         
         {researchResult && (
-          <div className="animate-slide-up" style={{ marginTop: '20px', padding: '20px', backgroundColor: '#2d2d2d', borderRadius: '8px', borderLeft: `4px solid ${researchResult.change >= 0 ? '#4ade80' : '#f87171'}` }}>
+          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} style={{ marginTop: '20px', padding: '20px', backgroundColor: '#2d2d2d', borderRadius: '8px', borderLeft: `4px solid ${researchResult.change >= 0 ? '#4ade80' : '#f87171'}`, overflow: 'hidden' }}>
             
             <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #444', paddingBottom: '10px', marginBottom: '15px' }}>
               <div><h3 style={{ margin: '0', fontSize: '1.3rem' }}>{researchResult.company}</h3><span style={{ color: '#888' }}>{researchResult.ticker}</span></div>
@@ -171,51 +182,54 @@ function App() {
 
             <p style={{ fontStyle: 'italic', margin: 0, color: '#d4d4d4', whiteSpace: 'pre-line', lineHeight: '1.6', backgroundColor: '#1e1e1e', padding: '15px', borderRadius: '8px', border: '1px solid #444' }}>{researchResult.analysis}</p>
 
-            <button 
+            <motion.button 
               onClick={() => setResearchResult(null)} 
-              style={{ marginTop: '20px', padding: '10px 20px', backgroundColor: '#333', color: 'white', border: '1px solid #555', borderRadius: '5px', cursor: 'pointer', width: '100%', transition: 'background 0.2s', fontWeight: 'bold' }}
-              onMouseOver={e => e.target.style.backgroundColor = '#444'} 
-              onMouseOut={e => e.target.style.backgroundColor = '#333'}
+              whileHover={{ backgroundColor: '#444' }}
+              whileTap={{ scale: 0.98 }}
+              style={{ marginTop: '20px', padding: '10px 20px', backgroundColor: '#333', color: 'white', border: '1px solid #555', borderRadius: '5px', cursor: 'pointer', width: '100%', fontWeight: 'bold' }}
             >
               Clear Analysis
-            </button>
-          </div>
+            </motion.button>
+          </motion.div>
         )}
-      </div>
+      </motion.div>
 
       {/* --- MODE 2: ROBO-ADVISOR GUIDED DISCOVERY --- */}
-      <div style={{ backgroundColor: '#1e1e1e', padding: '25px', borderRadius: '15px', marginBottom: '40px', boxShadow: '0 4px 6px rgba(0,0,0,0.3)', border: '1px solid #60a5fa' }}>
+      <motion.div 
+        initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.2 }}
+        style={{ backgroundColor: '#1e1e1e', padding: '25px', borderRadius: '15px', marginBottom: '40px', boxShadow: '0 4px 6px rgba(0,0,0,0.3)', border: '1px solid #60a5fa' }}
+      >
         <h2 style={{ margin: '0 0 15px 0', color: '#60a5fa', fontSize: '1.2rem', textTransform: 'uppercase', letterSpacing: '1px' }}>🤖 Guided Discovery</h2>
         
         {advisorStep === 0 && (
-          <button className="animate-slide-up" onClick={() => setAdvisorStep(1)} style={{ width: '100%', padding: '15px', backgroundColor: '#60a5fa', color: '#121212', fontWeight: 'bold', border: 'none', borderRadius: '8px', fontSize: '1.1rem', cursor: 'pointer' }}>
+          <motion.button initial={{ opacity: 0 }} animate={{ opacity: 1 }} whileHover={{ scale: 1.02, backgroundColor: '#3b82f6' }} whileTap={{ scale: 0.98 }} onClick={() => setAdvisorStep(1)} style={{ width: '100%', padding: '15px', backgroundColor: '#60a5fa', color: '#121212', fontWeight: 'bold', border: 'none', borderRadius: '8px', fontSize: '1.1rem', cursor: 'pointer' }}>
             Find Stocks For Me
-          </button>
+          </motion.button>
         )}
 
         {advisorStep === 1 && (
-          <div className="animate-slide-up">
+          <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}>
             <p style={{ fontSize: '1.1rem', marginBottom: '15px', color: '#fff' }}>1. Are you looking for a short-term trade or a long-term investment?</p>
             <div style={{ display: 'flex', gap: '10px' }}>
               <StepButton label="Short-term (Days/Weeks)" onClick={() => handleAnswer('horizon', 'Short-term')} />
               <StepButton label="Long-term (Years)" onClick={() => handleAnswer('horizon', 'Long-term')} />
             </div>
-          </div>
+          </motion.div>
         )}
-
+        
         {advisorStep === 2 && (
-          <div className="animate-slide-up">
+          <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}>
             <p style={{ fontSize: '1.1rem', marginBottom: '15px', color: '#fff' }}>2. How much risk are you comfortable with?</p>
             <div style={{ display: 'flex', gap: '10px' }}>
               <StepButton label="Low Risk (Steady)" onClick={() => handleAnswer('risk', 'Low risk')} />
               <StepButton label="Medium Risk" onClick={() => handleAnswer('risk', 'Medium risk')} />
               <StepButton label="High Reward" onClick={() => handleAnswer('risk', 'High risk')} />
             </div>
-          </div>
+          </motion.div>
         )}
 
         {advisorStep === 3 && (
-          <div className="animate-slide-up">
+          <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}>
             <p style={{ fontSize: '1.1rem', marginBottom: '15px', color: '#fff' }}>3. Are there any specific industries you are interested in?</p>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
               <StepButton label="IT & Tech" onClick={() => handleAnswer('sector', 'IT & Tech')} />
@@ -223,21 +237,21 @@ function App() {
               <StepButton label="Renewable/Defense" onClick={() => handleAnswer('sector', 'Renewable Energy or Defense')} />
               <StepButton label="Surprise Me" onClick={() => handleAnswer('sector', 'Any diverse sector')} />
             </div>
-          </div>
+          </motion.div>
         )}
 
         {advisorStep === 4 && (
-          <div className="animate-slide-up">
+          <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}>
             <p style={{ fontSize: '1.1rem', marginBottom: '15px', color: '#fff' }}>4. Roughly how much capital are you allocating (₹)?</p>
             <div style={{ display: 'flex', gap: '10px' }}>
               <input type="number" required value={discoveryAnswers.budget} onChange={(e) => setDiscoveryAnswers({...discoveryAnswers, budget: e.target.value})} placeholder="e.g., 5000" style={{ flex: 1, padding: '12px', borderRadius: '8px', border: '1px solid #444', backgroundColor: '#121212', color: 'white', fontSize: '1rem' }} />
-              <button onClick={() => setAdvisorStep(5)} disabled={!discoveryAnswers.budget} style={{ padding: '12px 24px', backgroundColor: '#60a5fa', color: '#121212', fontWeight: 'bold', border: 'none', borderRadius: '8px', cursor: 'pointer' }}>Next</button>
+              <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={() => setAdvisorStep(5)} disabled={!discoveryAnswers.budget} style={{ padding: '12px 24px', backgroundColor: '#60a5fa', color: '#121212', fontWeight: 'bold', border: 'none', borderRadius: '8px', cursor: 'pointer' }}>Next</motion.button>
             </div>
-          </div>
+          </motion.div>
         )}
 
         {advisorStep === 5 && (
-          <div className="animate-slide-up">
+          <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}>
             <p style={{ fontSize: '1.1rem', marginBottom: '15px', color: '#fff' }}>5. What is the primary goal for this specific investment?</p>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '10px' }}>
               {goals.map(g => (
@@ -253,23 +267,23 @@ function App() {
                   submitDiscovery(null, updatedAnswers);
               }} />
             </div>
-          </div>
+          </motion.div>
         )}
 
         {advisorStep === 6 && (
-          <div className="animate-radar" style={{ padding: '30px', textAlign: 'center', color: '#60a5fa' }}>
-            <h3>Lilith is aligning the market with your goals...</h3>
+          <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} style={{ padding: '30px', textAlign: 'center', color: '#60a5fa' }}>
+            <motion.h3 animate={{ opacity: [0.5, 1, 0.5] }} transition={{ repeat: Infinity, duration: 1.5 }}>Lilith is aligning the market with your goals...</motion.h3>
             <p style={{ color: '#888' }}>Scanning the Indian market based on your profile.</p>
-          </div>
+          </motion.div>
         )}
 
        {advisorStep === 7 && discoveryResults && (
-          <div className="animate-slide-up" style={{ padding: '20px', backgroundColor: '#121212', borderRadius: '8px', borderLeft: '4px solid #60a5fa' }}>
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} style={{ padding: '20px', backgroundColor: '#121212', borderRadius: '8px', borderLeft: '4px solid #60a5fa' }}>
             <h3 style={{ margin: '0 0 15px 0', color: '#60a5fa' }}>Tailored Recommendations:</h3>
             
             <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
               {Array.isArray(discoveryResults) ? discoveryResults.map((stock, index) => (
-                <div key={index} className="stock-card" style={{ padding: '15px', backgroundColor: '#1e1e1e', borderRadius: '8px', border: '1px solid #333' }}>
+                <motion.div key={index} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: index * 0.1 }} className="stock-card" style={{ padding: '15px', backgroundColor: '#1e1e1e', borderRadius: '8px', border: '1px solid #333' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <h4 style={{ margin: 0, color: '#60a5fa', fontSize: '1.1rem' }}>{stock.company} <span style={{color: '#888', fontSize: '0.9rem'}}>({stock.ticker})</span></h4>
                     <span style={{ fontWeight: 'bold', fontSize: '1.2rem', color: '#fff' }}>₹{stock.price.toFixed(2)}</span>
@@ -280,76 +294,107 @@ function App() {
                       Affordable: {stock.quantity} Shares
                     </span>
                   </div>
-                </div>
+                </motion.div>
               )) : (
                 <p style={{ lineHeight: '1.7', whiteSpace: 'pre-line', color: '#e5e5e5', margin: 0 }}>{discoveryResults}</p>
               )}
             </div>
 
-            <button onClick={resetAdvisor} style={{ marginTop: '30px', padding: '12px 20px', backgroundColor: '#333', color: 'white', border: '1px solid #555', borderRadius: '5px', cursor: 'pointer', width: '100%', fontWeight: 'bold', transition: 'background 0.2s' }} onMouseOver={e => e.target.style.backgroundColor = '#444'} onMouseOut={e => e.target.style.backgroundColor = '#333'}>
+            <motion.button whileHover={{ backgroundColor: '#444' }} whileTap={{ scale: 0.98 }} onClick={resetAdvisor} style={{ marginTop: '30px', padding: '12px 20px', backgroundColor: '#333', color: 'white', border: '1px solid #555', borderRadius: '5px', cursor: 'pointer', width: '100%', fontWeight: 'bold' }}>
               Initialize New Scan
-            </button>
-          </div>
+            </motion.button>
+          </motion.div>
         )}
-      </div>
+      </motion.div>
 
       {/* --- SMART ENTRY BAR --- */}
-      <div style={{ backgroundColor: '#1e1e1e', padding: '20px', borderRadius: '15px', marginBottom: '40px', boxShadow: '0 4px 6px rgba(0,0,0,0.3)' }}>
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.3 }} style={{ backgroundColor: '#1e1e1e', padding: '20px', borderRadius: '15px', marginBottom: '40px', boxShadow: '0 4px 6px rgba(0,0,0,0.3)' }}>
         <h2 style={{ margin: '0 0 15px 0', color: '#a3a3a3', fontSize: '1.2rem', textTransform: 'uppercase', letterSpacing: '1px' }}>⚡ Smart Entry</h2>
         <form onSubmit={handleSmartEntry} style={{ display: 'flex', gap: '10px' }}>
           <input type="text" value={smartInput} onChange={(e) => setSmartInput(e.target.value)} placeholder="e.g., Spent 450 on food..." style={{ flex: 1, padding: '12px', borderRadius: '8px', border: '1px solid #333', backgroundColor: '#2d2d2d', color: 'white' }} />
-          <button type="submit" disabled={isSmartLoading} style={{ padding: '12px 24px', backgroundColor: '#4ade80', color: '#121212', fontWeight: 'bold', border: 'none', borderRadius: '8px' }}>Add</button>
+          <motion.button type="submit" disabled={isSmartLoading} whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} style={{ padding: '12px 24px', backgroundColor: '#4ade80', color: '#121212', fontWeight: 'bold', border: 'none', borderRadius: '8px' }}>Add</motion.button>
         </form>
-      </div>
+      </motion.div>
 
       {/* --- THE BALANCE CARD --- */}
-      <div style={{ backgroundColor: '#1e1e1e', padding: '30px', borderRadius: '15px', textAlign: 'center', boxShadow: '0 4px 6px rgba(0,0,0,0.3)' }}>
+      <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.5, delay: 0.4 }} style={{ backgroundColor: '#1e1e1e', padding: '30px', borderRadius: '15px', textAlign: 'center', boxShadow: '0 4px 6px rgba(0,0,0,0.3)' }}>
         <h2 style={{ margin: '0 0 10px 0', color: '#a3a3a3', fontSize: '1.2rem', textTransform: 'uppercase', letterSpacing: '1px' }}>Current Net Worth</h2>
-        {balanceData ? <h1 style={{ fontSize: '4rem', margin: '0', color: '#4ade80' }}>₹{balanceData.netBalance}</h1> : <p>Loading...</p>}
-      </div>
-      <ActiveTrades />
+        {balanceData ? <motion.h1 key={balanceData.netBalance} initial={{ opacity: 0, scale: 0.5 }} animate={{ opacity: 1, scale: 1 }} style={{ fontSize: '4rem', margin: '0', color: '#4ade80' }}>₹{balanceData.netBalance}</motion.h1> : <p>Loading...</p>}
+      </motion.div>
       
+      <ActiveTrades />
+      {/* --- THE CASH FLOW ANALYTICS GRAPH --- */}
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.45 }} style={{ marginTop: '40px', backgroundColor: '#1e1e1e', padding: '30px', borderRadius: '15px', boxShadow: '0 4px 6px rgba(0,0,0,0.3)', border: '1px solid #333' }}>
+        <h2 style={{ margin: '0 0 20px 0', color: '#a3a3a3', fontSize: '1.2rem', textTransform: 'uppercase', letterSpacing: '1px' }}>📊 Cash Flow Analytics</h2>
+        
+        {transactions.length > 0 ? (
+          <div style={{ width: '100%', height: '250px' }}>
+            <ResponsiveContainer width="100%" height="100%">
+              {/* We reverse the array so the oldest transaction is on the left, newest on the right */}
+              <BarChart data={[...transactions].reverse()} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                <XAxis dataKey="description" stroke="#888" tick={{ fill: '#888', fontSize: 12 }} tickLine={false} axisLine={false} />
+                <Tooltip 
+                  cursor={{ fill: '#2d2d2d' }} 
+                  contentStyle={{ backgroundColor: '#121212', border: '1px solid #444', borderRadius: '8px', color: '#fff', fontWeight: 'bold' }} 
+                  formatter={(value) => [`₹${value}`, 'Amount']}
+                />
+                <Bar dataKey="amount" radius={[4, 4, 0, 0]}>
+                  {
+                    [...transactions].reverse().map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.type === 'income' ? '#4ade80' : '#f87171'} />
+                    ))
+                  }
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        ) : (
+          <div style={{ height: '250px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#555' }}>
+            <p>Awaiting transaction data...</p>
+          </div>
+        )}
+      </motion.div>
       {/* --- THE MILESTONES SECTION --- */}
-      <div style={{ marginTop: '50px' }}>
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }} style={{ marginTop: '50px' }}>
         <h2 style={{ borderBottom: '1px solid #333', paddingBottom: '10px', marginBottom: '20px', color: '#a3a3a3', textTransform: 'uppercase', fontSize: '1.2rem', letterSpacing: '1px' }}>Financial Milestones</h2>
         
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           {goals.length > 0 ? (
-            goals.map((goal) => {
+            goals.map((goal, index) => {
               const progressPercentage = Math.min((goal.current_amount / goal.target_amount) * 100, 100).toFixed(1);
 
               return (
-                <div key={goal.id} className="stock-card" style={{ backgroundColor: '#1e1e1e', padding: '20px', borderRadius: '10px', boxShadow: '0 4px 6px rgba(0,0,0,0.3)' }}>
+                <motion.div layout key={goal.id} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: index * 0.1 }} className="stock-card" style={{ backgroundColor: '#1e1e1e', padding: '20px', borderRadius: '10px', boxShadow: '0 4px 6px rgba(0,0,0,0.3)' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
                     <h3 style={{ margin: '0', fontSize: '1.2rem', color: '#fff' }}>{goal.title}</h3>
                     <span style={{ color: '#60a5fa', fontWeight: 'bold' }}>{progressPercentage}%</span>
                   </div>
                   
                   <div style={{ width: '100%', backgroundColor: '#333', height: '12px', borderRadius: '6px', overflow: 'hidden', marginBottom: '10px' }}>
-                    <div style={{ width: `${progressPercentage}%`, backgroundColor: '#60a5fa', height: '100%', transition: 'width 0.5s ease-in-out' }}></div>
+                    <motion.div initial={{ width: 0 }} animate={{ width: `${progressPercentage}%` }} transition={{ duration: 1, ease: "easeOut" }} style={{ backgroundColor: '#60a5fa', height: '100%' }}></motion.div>
                   </div>
                   
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', color: '#888' }}>
                     <span>₹{goal.current_amount} Saved</span>
                     <span>Target: ₹{goal.target_amount}</span>
                   </div>
-                </div>
+                </motion.div>
               );
             })
           ) : (
             <p style={{ textAlign: 'center', color: '#888' }}>No goals set yet.</p>
           )}
         </div>
-      </div>
+      </motion.div>
 
       {/* --- THE TRANSACTION HISTORY --- */}
-      <div style={{ marginTop: '50px', marginBottom: '40px' }}>
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.6 }} style={{ marginTop: '50px', marginBottom: '40px' }}>
         <h2 style={{ borderBottom: '1px solid #333', paddingBottom: '10px', marginBottom: '20px', color: '#a3a3a3', textTransform: 'uppercase', fontSize: '1.2rem', letterSpacing: '1px' }}>Recent Activity</h2>
         
         <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
           {transactions.length > 0 ? (
-            transactions.map((txn) => (
-              <div key={txn.id} className="stock-card" style={{ backgroundColor: '#1e1e1e', padding: '20px', borderRadius: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 4px 6px rgba(0,0,0,0.3)' }}>
+            transactions.map((txn, index) => (
+              <motion.div layout key={txn.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.05 }} className="stock-card" style={{ backgroundColor: '#1e1e1e', padding: '20px', borderRadius: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 4px 6px rgba(0,0,0,0.3)' }}>
                 <div>
                   <h3 style={{ margin: '0 0 5px 0', fontSize: '1.1rem', color: '#fff' }}>{txn.description}</h3>
                   <span style={{ backgroundColor: '#333', padding: '4px 8px', borderRadius: '5px', fontSize: '0.8rem', color: '#aaa', textTransform: 'capitalize' }}>
@@ -359,13 +404,13 @@ function App() {
                 <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: txn.type === 'income' ? '#4ade80' : '#f87171' }}>
                   {txn.type === 'income' ? '+' : '-'}₹{txn.amount}
                 </div>
-              </div>
+              </motion.div>
             ))
           ) : (
             <p style={{ textAlign: 'center', color: '#888' }}>No transactions found.</p>
           )}
         </div>
-      </div>
+      </motion.div>
 
     </div>
   );
