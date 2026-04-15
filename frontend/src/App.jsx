@@ -4,12 +4,20 @@ import ActiveTrades from './ActiveTrades';
 import { motion } from 'framer-motion';
 import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer, Cell, LineChart, Line, YAxis } from 'recharts';
 
-// --- MOCK TREND ENGINE ---
+// --- 5-YEAR MOCK TREND ENGINE ---
 const generateMockHistory = (currentPrice) => {
-  let price = currentPrice * 0.85; // Start the graph slightly lower
-  return Array.from({ length: 30 }).map((_, i) => {
-    // Add a random daily fluctuation (up or down)
-    price += (Math.random() - 0.45) * (currentPrice * 0.03); 
+  // Start the graph at roughly half the current price to simulate 5 years of growth
+  let price = currentPrice * 0.50; 
+  
+  // 1260 represents 5 years of open stock market days (252 days * 5)
+  return Array.from({ length: 1260 }).map((_, i) => {
+    
+    // Calculate a smaller, compounding daily percentage change
+    price += (Math.random() - 0.48) * (price * 0.02); 
+    
+    // A safeguard to ensure the mock price never accidentally drops below ₹1
+    if (price < 1) price = 1 + Math.random(); 
+    
     return { day: i + 1, price: parseFloat(price.toFixed(2)) };
   });
 };
