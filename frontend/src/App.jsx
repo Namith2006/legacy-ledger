@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import './App.css';
 import ActiveTrades from './ActiveTrades';
 import { motion } from 'framer-motion';
-import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer, Cell, LineChart, Line, YAxis } from 'recharts';
+
 // --- MOCK TREND ENGINE ---
 const generateMockHistory = (currentPrice) => {
   let price = currentPrice * 0.85; // Start the graph slightly lower
@@ -12,6 +13,7 @@ const generateMockHistory = (currentPrice) => {
     return { day: i + 1, price: parseFloat(price.toFixed(2)) };
   });
 };
+
 function App() {
   // --- Standard States ---
   const [balanceData, setBalanceData] = useState(null);
@@ -37,21 +39,15 @@ function App() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // 1. Fetch Balance
         const balanceRes = await fetch('https://legacy-ledger.onrender.com/api/transactions/balance/1');
-        if (balanceRes.ok) {
-          const data = await balanceRes.json();
-          setBalanceData(data);
-        }
+        if (balanceRes.ok) setBalanceData(await balanceRes.json());
 
-        // 2. Fetch Transactions
         const transRes = await fetch('https://legacy-ledger.onrender.com/api/transactions/1');
         if (transRes.ok) {
           const data = await transRes.json();
           setTransactions(Array.isArray(data) ? data : []);
         }
 
-        // 3. Fetch Goals
         const goalsRes = await fetch('https://legacy-ledger.onrender.com/api/goals/1');
         if (goalsRes.ok) {
           const data = await goalsRes.json();
@@ -61,11 +57,10 @@ function App() {
         console.error("❌ Dashboard Load Error:", err);
       }
     };
-
     fetchData();
   }, []);
 
- // Mode 1: Market Radar Function
+  // Mode 1: Market Radar Function
   const handleResearch = async (e) => { 
     e.preventDefault(); 
     if (!researchQuery) return; 
@@ -79,17 +74,14 @@ function App() {
       }); 
       const result = await response.json(); 
       
-      // --- THE STEP 3 UPDATE IS HERE ---
       if (response.ok) { 
         setResearchResult({
           ...result.data,
-          history: generateMockHistory(result.data.price) // Attaching the 30-day trend!
+          history: generateMockHistory(result.data.price) 
         }); 
       } else { 
         alert(result.message); 
       } 
-      // ---------------------------------
-
     } catch (error) { 
       alert("Market connection lost."); 
     } 
@@ -132,7 +124,8 @@ function App() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(finalAnswers)
-      });   const data = await response.json();
+      });   
+      const data = await response.json();
 
       if (!response.ok) {
         alert("Gemini is currently caught in global traffic! Please wait a moment and try again.");
@@ -140,7 +133,13 @@ function App() {
         return; 
       }
 
-      setDiscoveryResults(data.recommendations);
+      // Attach mock history for sparklines
+      const enhancedRecommendations = data.recommendations.map(stock => ({
+        ...stock,
+        history: generateMockHistory(stock.price)
+      }));
+
+      setDiscoveryResults(enhancedRecommendations);
       setAdvisorStep(7); 
       
     } catch (error) {
@@ -155,7 +154,7 @@ function App() {
     setDiscoveryResults(null);
   };
 
-  // Upgraded Framer Motion Button Component
+  // Framer Motion Button Component
   const StepButton = ({ label, onClick }) => (
     <motion.button 
       onClick={onClick} 
@@ -170,21 +169,13 @@ function App() {
   return (
     <div className="dashboard-container" style={{ maxWidth: '800px', margin: '0 auto', padding: '40px', fontFamily: 'sans-serif' }}>
       
-      <motion.div 
-        initial={{ opacity: 0, y: -20 }} 
-        animate={{ opacity: 1, y: 0 }} 
-        transition={{ duration: 0.6 }}
-        style={{ textAlign: 'center', marginBottom: '40px' }}
-      >
+      <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }} style={{ textAlign: 'center', marginBottom: '40px' }}>
         <h1 style={{ fontSize: '2.5rem', marginBottom: '5px' }}>Legacy Ledger</h1>
         <p style={{ color: '#888' }}>Welcome to your financial dashboard!</p>
       </motion.div>
 
       {/* --- MODE 1: ON-DEMAND RADAR --- */}
-      <motion.div 
-        initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.1 }}
-        style={{ backgroundColor: '#1e1e1e', padding: '20px', borderRadius: '15px', marginBottom: '20px', boxShadow: '0 4px 6px rgba(0,0,0,0.3)', border: '1px solid #444' }}
-      >
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.1 }} style={{ backgroundColor: '#1e1e1e', padding: '20px', borderRadius: '15px', marginBottom: '20px', boxShadow: '0 4px 6px rgba(0,0,0,0.3)', border: '1px solid #444' }}>
         <h2 style={{ margin: '0 0 15px 0', color: '#a3a3a3', fontSize: '1.2rem', textTransform: 'uppercase', letterSpacing: '1px' }}>📡 On-Demand Analysis</h2>
         <form onSubmit={handleResearch} style={{ display: 'flex', gap: '10px' }}>
           <input type="text" value={researchQuery} onChange={(e) => setResearchQuery(e.target.value)} placeholder="Analyze specific stock (e.g., Tata Motors)..." style={{ flex: 1, padding: '12px', borderRadius: '8px', border: '1px solid #444', backgroundColor: '#121212', color: 'white', fontSize: '1rem' }} />
@@ -195,7 +186,6 @@ function App() {
         
         {researchResult && (
           <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} style={{ marginTop: '20px', padding: '20px', backgroundColor: '#2d2d2d', borderRadius: '8px', borderLeft: `4px solid ${researchResult.change >= 0 ? '#4ade80' : '#f87171'}`, overflow: 'hidden' }}>
-            
             <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #444', paddingBottom: '10px', marginBottom: '15px' }}>
               <div><h3 style={{ margin: '0', fontSize: '1.3rem' }}>{researchResult.company}</h3><span style={{ color: '#888' }}>{researchResult.ticker}</span></div>
               <div style={{ textAlign: 'right' }}>
@@ -205,29 +195,27 @@ function App() {
                 </span>
               </div>
             </div>
-{/* RADAR SCATTER PLOT */}
+
+            {/* RADAR LINE CHART */}
             <div style={{ width: '100%', height: '150px', marginBottom: '15px' }}>
               <ResponsiveContainer width="100%" height="100%">
-                <ScatterChart margin={{ top: 5, right: 5, bottom: 5, left: 5 }}>
-                  <XAxis dataKey="day" type="number" hide domain={['dataMin', 'dataMax']} />
-                  <YAxis dataKey="price" type="number" hide domain={['auto', 'auto']} />
+                <LineChart data={researchResult.history} margin={{ top: 5, right: 5, bottom: 5, left: 5 }}>
+                  <XAxis dataKey="day" hide />
+                  <YAxis domain={['auto', 'auto']} hide />
                   <Tooltip 
-                    cursor={{ strokeDasharray: '3 3' }} 
+                    cursor={{ stroke: '#444', strokeWidth: 1, strokeDasharray: '5 5' }}
                     contentStyle={{ backgroundColor: '#121212', border: '1px solid #444', borderRadius: '8px', color: '#fff' }}
                     formatter={(value) => [`₹${value}`, 'Price']}
+                    labelFormatter={() => ''}
                   />
-                  <Scatter name="Trend" data={researchResult.history} fill={researchResult.change >= 0 ? '#4ade80' : '#f87171'} />
-                </ScatterChart>
+                  <Line type="monotone" dataKey="price" stroke={researchResult.change >= 0 ? '#4ade80' : '#f87171'} strokeWidth={3} dot={false} activeDot={{ r: 6, fill: researchResult.change >= 0 ? '#4ade80' : '#f87171' }} />
+                </LineChart>
               </ResponsiveContainer>
             </div>
+
             <p style={{ fontStyle: 'italic', margin: 0, color: '#d4d4d4', whiteSpace: 'pre-line', lineHeight: '1.6', backgroundColor: '#1e1e1e', padding: '15px', borderRadius: '8px', border: '1px solid #444' }}>{researchResult.analysis}</p>
 
-            <motion.button 
-              onClick={() => setResearchResult(null)} 
-              whileHover={{ backgroundColor: '#444' }}
-              whileTap={{ scale: 0.98 }}
-              style={{ marginTop: '20px', padding: '10px 20px', backgroundColor: '#333', color: 'white', border: '1px solid #555', borderRadius: '5px', cursor: 'pointer', width: '100%', fontWeight: 'bold' }}
-            >
+            <motion.button onClick={() => setResearchResult(null)} whileHover={{ backgroundColor: '#444' }} whileTap={{ scale: 0.98 }} style={{ marginTop: '20px', padding: '10px 20px', backgroundColor: '#333', color: 'white', border: '1px solid #555', borderRadius: '5px', cursor: 'pointer', width: '100%', fontWeight: 'bold' }}>
               Clear Analysis
             </motion.button>
           </motion.div>
@@ -235,10 +223,7 @@ function App() {
       </motion.div>
 
       {/* --- MODE 2: ROBO-ADVISOR GUIDED DISCOVERY --- */}
-      <motion.div 
-        initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.2 }}
-        style={{ backgroundColor: '#1e1e1e', padding: '25px', borderRadius: '15px', marginBottom: '40px', boxShadow: '0 4px 6px rgba(0,0,0,0.3)', border: '1px solid #60a5fa' }}
-      >
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.2 }} style={{ backgroundColor: '#1e1e1e', padding: '25px', borderRadius: '15px', marginBottom: '40px', boxShadow: '0 4px 6px rgba(0,0,0,0.3)', border: '1px solid #60a5fa' }}>
         <h2 style={{ margin: '0 0 15px 0', color: '#60a5fa', fontSize: '1.2rem', textTransform: 'uppercase', letterSpacing: '1px' }}>🤖 Guided Discovery</h2>
         
         {advisorStep === 0 && (
@@ -321,41 +306,54 @@ function App() {
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} style={{ padding: '20px', backgroundColor: '#121212', borderRadius: '8px', borderLeft: '4px solid #60a5fa' }}>
             <h3 style={{ margin: '0 0 15px 0', color: '#60a5fa' }}>Tailored Recommendations:</h3>
             
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-              {Array.isArray(discoveryResults) ? discoveryResults.map((stock, index) => (
-                <motion.div key={index} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: index * 0.1 }} className="stock-card" style={{ padding: '15px', backgroundColor: '#1e1e1e', borderRadius: '8px', border: '1px solid #333' }}>
-                  
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <h4 style={{ margin: 0, color: '#60a5fa', fontSize: '1.1rem' }}>{stock.company} <span style={{color: '#888', fontSize: '0.9rem'}}>({stock.ticker})</span></h4>
-                    <span style={{ fontWeight: 'bold', fontSize: '1.2rem', color: '#fff' }}>₹{stock.price.toFixed(2)}</span>
-                  </div>
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              {Array.isArray(discoveryResults) ? discoveryResults.map((stock, index) => {
+                
+                // Calculate if the mock trend is positive or negative for coloring
+                const startPrice = stock.history[0].price;
+                const endPrice = stock.history[stock.history.length - 1].price;
+                const isPositive = endPrice >= startPrice;
+                const trendColor = isPositive ? '#4ade80' : '#f87171';
+                const percentChange = (((endPrice - startPrice) / startPrice) * 100).toFixed(2);
 
-                  {/* --- MOCK HISTORY SCATTER PLOT INJECTED HERE --- */}
-                  <div style={{ width: '100%', height: '80px', marginTop: '10px' }}>
-                    <ResponsiveContainer width="100%" height="100%">
-                      <ScatterChart margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
-                        <XAxis dataKey="day" type="number" hide domain={['dataMin', 'dataMax']} />
-                        <YAxis dataKey="price" type="number" hide domain={['auto', 'auto']} />
-                        <Tooltip 
-                          cursor={false}
-                          contentStyle={{ backgroundColor: '#121212', border: '1px solid #444', borderRadius: '8px', color: '#fff', fontSize: '0.8rem' }}
-                        />
-                        <Scatter data={stock.history} fill="#60a5fa" />
-                      </ScatterChart>
-                    </ResponsiveContainer>
-                  </div>
-                  {/* ----------------------------------------------- */}
+                return (
+                  <motion.div key={index} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: index * 0.1 }} style={{ padding: '15px 0', borderBottom: '1px solid #2d2d2d', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    
+                    {/* --- TOP ROW: THE SPARKLINE LAYOUT --- */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div style={{ flex: 1.2, minWidth: '100px' }}>
+                        <h4 style={{ margin: 0, color: '#fff', fontSize: '0.95rem', fontWeight: '600', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{stock.company}</h4>
+                        <span style={{color: '#888', fontSize: '0.8rem'}}>{stock.ticker}</span>
+                      </div>
 
-                  <p style={{ fontSize: '0.95rem', color: '#ccc', margin: '10px 0', lineHeight: '1.5' }}>{stock.reason}</p>
-                  
-                  <div style={{ backgroundColor: '#2d2d2d', padding: '10px', borderRadius: '5px', textAlign: 'center', border: '1px solid #4ade80' }}>
-                    <span style={{ color: '#4ade80', fontWeight: 'bold', fontSize: '1.1rem' }}>
-                      Affordable: {stock.quantity} Shares
-                    </span>
-                  </div>
+                      <div style={{ flex: 1, height: '35px', margin: '0 10px' }}>
+                        <ResponsiveContainer width="100%" height="100%">
+                          <LineChart data={stock.history}>
+                            <YAxis domain={['dataMin', 'dataMax']} hide />
+                            <Line type="monotone" dataKey="price" stroke={trendColor} strokeWidth={1.5} dot={false} isAnimationActive={true} />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </div>
 
-                </motion.div>
-              )) : (
+                      <div style={{ flex: 0.8, textAlign: 'right', minWidth: '80px' }}>
+                        <div style={{ fontWeight: '600', fontSize: '1rem', color: '#fff' }}>₹{stock.price.toFixed(2)}</div>
+                        <div style={{ color: trendColor, fontSize: '0.75rem', marginTop: '2px' }}>
+                          {isPositive ? '+' : ''}{percentChange}%
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* --- BOTTOM ROW: AI REASONING --- */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', backgroundColor: '#1a1a1a', padding: '10px', borderRadius: '6px' }}>
+                      <p style={{ fontSize: '0.8rem', color: '#aaa', margin: '0', lineHeight: '1.4', flex: 1, paddingRight: '10px' }}>{stock.reason}</p>
+                      <span style={{ backgroundColor: '#2d2d2d', padding: '4px 8px', borderRadius: '4px', color: '#fff', fontSize: '0.75rem', fontWeight: 'bold', border: `1px solid ${trendColor}`, whiteSpace: 'nowrap' }}>
+                        Buy {stock.quantity}
+                      </span>
+                    </div>
+
+                  </motion.div>
+                );
+              }) : (
                 <p style={{ lineHeight: '1.7', whiteSpace: 'pre-line', color: '#e5e5e5', margin: 0 }}>{discoveryResults}</p>
               )}
             </div>
@@ -383,27 +381,20 @@ function App() {
       </motion.div>
       
       <ActiveTrades />
+
       {/* --- THE CASH FLOW ANALYTICS GRAPH --- */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.45 }} style={{ marginTop: '40px', backgroundColor: '#1e1e1e', padding: '30px', borderRadius: '15px', boxShadow: '0 4px 6px rgba(0,0,0,0.3)', border: '1px solid #333' }}>
         <h2 style={{ margin: '0 0 20px 0', color: '#a3a3a3', fontSize: '1.2rem', textTransform: 'uppercase', letterSpacing: '1px' }}>📊 Cash Flow Analytics</h2>
-        
         {transactions.length > 0 ? (
           <div style={{ width: '100%', height: '250px' }}>
             <ResponsiveContainer width="100%" height="100%">
-              {/* We reverse the array so the oldest transaction is on the left, newest on the right */}
               <BarChart data={[...transactions].reverse()} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <XAxis dataKey="description" stroke="#888" tick={{ fill: '#888', fontSize: 12 }} tickLine={false} axisLine={false} />
-                <Tooltip 
-                  cursor={{ fill: '#2d2d2d' }} 
-                  contentStyle={{ backgroundColor: '#121212', border: '1px solid #444', borderRadius: '8px', color: '#fff', fontWeight: 'bold' }} 
-                  formatter={(value) => [`₹${value}`, 'Amount']}
-                />
+                <Tooltip cursor={{ fill: '#2d2d2d' }} contentStyle={{ backgroundColor: '#121212', border: '1px solid #444', borderRadius: '8px', color: '#fff', fontWeight: 'bold' }} formatter={(value) => [`₹${value}`, 'Amount']} />
                 <Bar dataKey="amount" radius={[4, 4, 0, 0]}>
-                  {
-                    [...transactions].reverse().map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.type === 'income' ? '#4ade80' : '#f87171'} />
-                    ))
-                  }
+                  {[...transactions].reverse().map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.type === 'income' ? '#4ade80' : '#f87171'} />
+                  ))}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
@@ -414,26 +405,23 @@ function App() {
           </div>
         )}
       </motion.div>
+
       {/* --- THE MILESTONES SECTION --- */}
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }} style={{ marginTop: '50px' }}>
         <h2 style={{ borderBottom: '1px solid #333', paddingBottom: '10px', marginBottom: '20px', color: '#a3a3a3', textTransform: 'uppercase', fontSize: '1.2rem', letterSpacing: '1px' }}>Financial Milestones</h2>
-        
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           {goals.length > 0 ? (
             goals.map((goal, index) => {
               const progressPercentage = Math.min((goal.current_amount / goal.target_amount) * 100, 100).toFixed(1);
-
               return (
                 <motion.div layout key={goal.id} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: index * 0.1 }} className="stock-card" style={{ backgroundColor: '#1e1e1e', padding: '20px', borderRadius: '10px', boxShadow: '0 4px 6px rgba(0,0,0,0.3)' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
                     <h3 style={{ margin: '0', fontSize: '1.2rem', color: '#fff' }}>{goal.title}</h3>
                     <span style={{ color: '#60a5fa', fontWeight: 'bold' }}>{progressPercentage}%</span>
                   </div>
-                  
                   <div style={{ width: '100%', backgroundColor: '#333', height: '12px', borderRadius: '6px', overflow: 'hidden', marginBottom: '10px' }}>
                     <motion.div initial={{ width: 0 }} animate={{ width: `${progressPercentage}%` }} transition={{ duration: 1, ease: "easeOut" }} style={{ backgroundColor: '#60a5fa', height: '100%' }}></motion.div>
                   </div>
-                  
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', color: '#888' }}>
                     <span>₹{goal.current_amount} Saved</span>
                     <span>Target: ₹{goal.target_amount}</span>
@@ -450,7 +438,6 @@ function App() {
       {/* --- THE TRANSACTION HISTORY --- */}
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.6 }} style={{ marginTop: '50px', marginBottom: '40px' }}>
         <h2 style={{ borderBottom: '1px solid #333', paddingBottom: '10px', marginBottom: '20px', color: '#a3a3a3', textTransform: 'uppercase', fontSize: '1.2rem', letterSpacing: '1px' }}>Recent Activity</h2>
-        
         <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
           {transactions.length > 0 ? (
             transactions.map((txn, index) => (
