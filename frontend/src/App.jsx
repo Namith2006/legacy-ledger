@@ -27,7 +27,7 @@ function App() {
   const [researchQuery, setResearchQuery] = useState('');
   const [isResearchLoading, setIsResearchLoading] = useState(false);
   const [researchResult, setResearchResult] = useState(null);
-
+  const [radarCapital, setRadarCapital] = useState('');
   // --- Mode 2: Guided Discovery States ---
   const [advisorStep, setAdvisorStep] = useState(0); 
   const [discoveryAnswers, setDiscoveryAnswers] = useState({
@@ -212,7 +212,26 @@ function App() {
                 </LineChart>
               </ResponsiveContainer>
             </div>
-
+             {/* --- PURCHASING POWER CALCULATOR --- */}
+            <div style={{ display: 'flex', alignItems: 'center', backgroundColor: '#1a1a1a', padding: '15px', borderRadius: '8px', border: '1px solid #333', marginBottom: '15px' }}>
+              <div style={{ flex: 1 }}>
+                <span style={{ color: '#888', fontSize: '0.85rem', display: 'block', marginBottom: '5px', textTransform: 'uppercase', letterSpacing: '1px' }}>Available Capital</span>
+                <input 
+                  type="number" 
+                  value={radarCapital} 
+                  onChange={(e) => setRadarCapital(e.target.value)} 
+                  placeholder="₹ Enter amount..." 
+                  style={{ width: '90%', padding: '10px', borderRadius: '6px', border: '1px solid #444', backgroundColor: '#121212', color: '#4ade80', fontWeight: 'bold', fontSize: '1rem', outline: 'none' }}
+                />
+              </div>
+              <div style={{ flex: 1, textAlign: 'right', borderLeft: '1px solid #333', paddingLeft: '15px' }}>
+                <span style={{ color: '#888', fontSize: '0.85rem', display: 'block', marginBottom: '5px', textTransform: 'uppercase', letterSpacing: '1px' }}>Max Affordability</span>
+                <span style={{ fontSize: '1.8rem', fontWeight: 'bold', color: '#fff' }}>
+                  {radarCapital && researchResult.price ? Math.floor(radarCapital / researchResult.price) : 0} 
+                  <span style={{ fontSize: '1rem', color: '#60a5fa', marginLeft: '5px' }}>Shares</span>
+                </span>
+              </div>
+            </div>
             <p style={{ fontStyle: 'italic', margin: 0, color: '#d4d4d4', whiteSpace: 'pre-line', lineHeight: '1.6', backgroundColor: '#1e1e1e', padding: '15px', borderRadius: '8px', border: '1px solid #444' }}>{researchResult.analysis}</p>
 
             <motion.button onClick={() => setResearchResult(null)} whileHover={{ backgroundColor: '#444' }} whileTap={{ scale: 0.98 }} style={{ marginTop: '20px', padding: '10px 20px', backgroundColor: '#333', color: 'white', border: '1px solid #555', borderRadius: '5px', cursor: 'pointer', width: '100%', fontWeight: 'bold' }}>
@@ -221,7 +240,7 @@ function App() {
           </motion.div>
         )}
       </motion.div>
-
+       
       {/* --- MODE 2: ROBO-ADVISOR GUIDED DISCOVERY --- */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.2 }} style={{ backgroundColor: '#1e1e1e', padding: '25px', borderRadius: '15px', marginBottom: '40px', boxShadow: '0 4px 6px rgba(0,0,0,0.3)', border: '1px solid #60a5fa' }}>
         <h2 style={{ margin: '0 0 15px 0', color: '#60a5fa', fontSize: '1.2rem', textTransform: 'uppercase', letterSpacing: '1px' }}>🤖 Guided Discovery</h2>
