@@ -99,11 +99,9 @@ router.post('/smart-entry', async (req, res) => {
         Return ONLY valid JSON.
         `;
 
-        // USING THE NEW TRAFFIC JAM BUSTER! (Temporarily Disabled for Quota)
-        // const rawAiText = await callGeminiWithRetry(prompt);
-        
-        // --- TEMPORARY MOCK DATA ---
-        const rawAiText = `{"type": "expense", "amount": 999, "category": "tech", "description": "Mock Data Entry"}`;
+        // --- GEMINI IS NOW LIVE ---
+        const rawAiText = await callGeminiWithRetry(prompt);
+        // --------------------------
 
         let cleanJson = rawAiText.replace(/```json/gi, '').replace(/```/gi, '').trim();
         const parsedData = JSON.parse(cleanJson);
