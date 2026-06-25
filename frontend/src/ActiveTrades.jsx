@@ -4,8 +4,10 @@ const ActiveTrades = () => {
   const [trades, setTrades] = useState([]);
 
   useEffect(() => {
-    // Fetching the live data from your backend
-    fetch('https://legacy-ledger.onrender.com/api/transactions')
+    // Replace '1' with your dynamic user ID logic (e.g., from your auth context)
+    const userId = 1; 
+
+    fetch(`https://legacy-ledger.onrender.com/api/transactions/${userId}`)
       .then(res => {
         if (!res.ok) throw new Error("Server error");
         return res.json();
@@ -55,7 +57,7 @@ const ActiveTrades = () => {
                     ₹{liveMarketPrice.toLocaleString()}
                   </p>
                   
-                  {/* DATE AND TIME DISPLAY */}
+                  {/* TIMESTAMP DISPLAY */}
                   <p className="text-[10px] text-gray-500 uppercase tracking-widest mt-1">
                     {trade.updated_at ? (
                       <>
