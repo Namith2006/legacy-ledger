@@ -19,18 +19,15 @@ router.post('/', async (req, res) => {
     }
 });
 
-// 2. FETCH ROUTE: Explicitly get the timestamp
+// 2. FETCH ROUTE: Universal Data Fetch (The Fix is Here)
 router.get('/:userId', async (req, res) => {
     try {
         const { userId } = req.params;
         
-        // Explicitly selecting columns ensures you don't miss the updated_at timestamp
-        // If your column is named differently (e.g., last_updated), change it here!
+        // Using SELECT * ensures we get the timestamp for the War Room, 
+        // AND the amount/type/description for the Cash Flow Analytics.
         const transactions = await db.query(
-            `SELECT id, asset_name, asset_symbol, quantity, entry_price, 
-                    stop_loss_price, target_sell_price, live_price, updated_at 
-             FROM transactions 
-             WHERE user_id = $1 ORDER BY id DESC`,
+            "SELECT * FROM transactions WHERE user_id = $1 ORDER BY id DESC",
             [userId]
         );
 
