@@ -58,6 +58,11 @@ app.get('/api/investments', async (req, res) => {
     }
 });
 
+// --- KEEP-AWAKE PING ROUTE FOR UPTIMEROBOT ---
+app.get('/api/ping', (req, res) => {
+    res.status(200).send("Legacy Ledger Backend is awake!");
+});
+
 app.get('/', (req, res) => {
   res.send('Legacy Ledger API is running!');
 });
