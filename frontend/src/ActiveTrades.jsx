@@ -4,15 +4,13 @@ const ActiveTrades = () => {
   const [trades, setTrades] = useState([]);
 
   useEffect(() => {
-    // Fetching the live data from your new backend route!
-   fetch('https://legacy-ledger.onrender.com/api/transactions')
+    // Fetching the live data from your backend
+    fetch('https://legacy-ledger.onrender.com/api/transactions')
       .then(res => {
-        // SAFETY NET 1: If the server throws a 500 error, stop here!
         if (!res.ok) throw new Error("Server error");
         return res.json();
       })
       .then(data => {
-        // SAFETY NET 2: Only save the data if it is actually a list (Array)
         if (Array.isArray(data)) {
           setTrades(data);
         } else {
@@ -21,7 +19,7 @@ const ActiveTrades = () => {
       })
       .catch(err => {
         console.error("Fetch error:", err);
-        setTrades([]); // If it fails, just show the empty state
+        setTrades([]);
       });
   }, []);
 
@@ -29,17 +27,11 @@ const ActiveTrades = () => {
     <div className="mt-8 animate-slide-up">
       <h2 className="text-xl font-bold text-gray-200 mb-4 tracking-wider">⚡ THE WAR ROOM (ACTIVE TRADES)</h2>
       
-      {/* SAFETY NET 3: Make absolutely sure it's an array before mapping! */}
       {!Array.isArray(trades) || trades.length === 0 ? (
         <p className="text-gray-400">No active trades found. Waiting for intel...</p>
       ) : (
         trades.map(trade => {
-          // Note: Since we built the Live Engine on the backend, 
-          // we can use trade.live_price here instead of the mock 16500!
-          // (Fallback to 16500 just in case the backend price is missing)
           const liveMarketPrice = trade.live_price || 16500; 
-          
-          // The Strategy Math
           const profit = liveMarketPrice - trade.entry_price;
           const isProfit = profit >= 0;
           
@@ -48,7 +40,7 @@ const ActiveTrades = () => {
           const percentage = Math.min(Math.max((currentProgress / totalRange) * 100, 0), 100);
 
           return (
-            <div key={trade.id} className="bg-[#1e2330] p-6 rounded-xl border border-gray-700 shadow-lg relative overflow-hidden transition-all hover:-translate-y-1">
+            <div key={trade.id} className="bg-[#1e2330] p-6 rounded-xl border border-gray-700 shadow-lg relative overflow-hidden transition-all hover:-translate-y-1 mb-4">
               <div className={`absolute left-0 top-0 w-1 h-full ${isProfit ? 'bg-green-400' : 'bg-red-400'}`}></div>
 
               <div className="flex justify-between items-center mb-6">
@@ -62,7 +54,18 @@ const ActiveTrades = () => {
                   <p className={`text-2xl font-bold ${isProfit ? 'text-green-400' : 'text-red-400'}`}>
                     ₹{liveMarketPrice.toLocaleString()}
                   </p>
-                  <p className="text-sm text-gray-400">Live Market Price</p>
+                  
+                  {/* DATE AND TIME DISPLAY */}
+                  <p className="text-[10px] text-gray-500 uppercase tracking-widest mt-1">
+                    {trade.updated_at ? (
+                      <>
+                        {new Date(trade.updated_at).toLocaleDateString()} | {' '}
+                        {new Date(trade.updated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </>
+                    ) : (
+                      'Live'
+                    )}
+                  </p>
                 </div>
               </div>
 
