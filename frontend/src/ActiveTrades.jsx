@@ -4,7 +4,7 @@ const ActiveTrades = () => {
   const [trades, setTrades] = useState([]);
 
   useEffect(() => {
-    // Replace '1' with your dynamic user ID logic (e.g., from your auth context)
+    // Make sure this matches your dynamic user ID logic
     const userId = 1; 
 
     fetch(`https://legacy-ledger.onrender.com/api/transactions/${userId}`)
@@ -25,14 +25,19 @@ const ActiveTrades = () => {
       });
   }, []);
 
+  // --- THE FIX: Isolate only the actual stock trades ---
+  // This filters out regular income/expense transactions
+  const activeStockTrades = trades.filter(trade => trade.asset_name);
+
   return (
     <div className="mt-8 animate-slide-up">
       <h2 className="text-xl font-bold text-gray-200 mb-4 tracking-wider">⚡ THE WAR ROOM (ACTIVE TRADES)</h2>
       
-      {!Array.isArray(trades) || trades.length === 0 ? (
+      {/* Update this check to use our new filtered list */}
+      {!Array.isArray(activeStockTrades) || activeStockTrades.length === 0 ? (
         <p className="text-gray-400">No active trades found. Waiting for intel...</p>
       ) : (
-        trades.map(trade => {
+        activeStockTrades.map(trade => {
           const liveMarketPrice = trade.live_price || 16500; 
           const profit = liveMarketPrice - trade.entry_price;
           const isProfit = profit >= 0;
