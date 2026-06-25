@@ -19,14 +19,18 @@ router.post('/', async (req, res) => {
     }
 });
 
-// 2. THE MISSING ROUTE: Fetch all transactions for the dashboard
+// 2. FETCH ROUTE: Explicitly get the timestamp
 router.get('/:userId', async (req, res) => {
     try {
         const { userId } = req.params;
         
-        // Grab all transactions for this user, newest first
+        // Explicitly selecting columns ensures you don't miss the updated_at timestamp
+        // If your column is named differently (e.g., last_updated), change it here!
         const transactions = await db.query(
-            "SELECT * FROM transactions WHERE user_id = $1 ORDER BY id DESC",
+            `SELECT id, asset_name, asset_symbol, quantity, entry_price, 
+                    stop_loss_price, target_sell_price, live_price, updated_at 
+             FROM transactions 
+             WHERE user_id = $1 ORDER BY id DESC`,
             [userId]
         );
 
@@ -37,12 +41,10 @@ router.get('/:userId', async (req, res) => {
     }
 });
 
-// 3. Route to calculate the total balance for a user
+// 3. Route to calculate the total balance
 router.get('/balance/:userId', async (req, res) => {
     try {
         const { userId } = req.params;
-        
-        // Fetch all of the user's money data
         const transactions = await db.query(
             "SELECT type, amount FROM transactions WHERE user_id = $1",
             [userId]
@@ -51,53 +53,37 @@ router.get('/balance/:userId', async (req, res) => {
         let totalIncome = 0;
         let totalExpense = 0;
 
-        // Sort through the data and do the math
         transactions.rows.forEach(t => {
-            if (t.type === 'income') {
-                totalIncome += parseFloat(t.amount);
-            } else if (t.type === 'expense') {
-                totalExpense += parseFloat(t.amount);
-            }
+            if (t.type === 'income') totalIncome += parseFloat(t.amount);
+            else if (t.type === 'expense') totalExpense += parseFloat(t.amount);
         });
 
-        // Calculate the final net worth
-        const currentBalance = totalIncome - totalExpense;
-
-        // Send the final report back to the user
         res.json({
             message: "Financial Summary",
             totalIncome: totalIncome,
             totalExpense: totalExpense,
-            netBalance: currentBalance
+            netBalance: totalIncome - totalExpense
         });
-
     } catch (err) {
         console.error(err.message);
         res.status(500).send("Server Error");
     }
 });
 
-// 4. Route to delete a specific transaction
+// 4. Route to delete a transaction
 router.delete('/:id', async (req, res) => {
     try {
         const { id } = req.params; 
-        
-        const deleteOp = await db.query(
-            "DELETE FROM transactions WHERE id = $1 RETURNING *",
-            [id]
-        );
+        const deleteOp = await db.query("DELETE FROM transactions WHERE id = $1 RETURNING *", [id]);
 
         if (deleteOp.rows.length === 0) {
             return res.status(404).json({ message: "Transaction not found!" });
         }
-
         res.json({ message: "Transaction deleted successfully!" });
-
     } catch (err) {
         console.error(err.message);
         res.status(500).send("Server Error");
     }
 });
 
-// THE STOP SIGN GOES AT THE VERY END!
 module.exports = router;
