@@ -1,11 +1,11 @@
-require('dotenv').config(); // THIS MUST BE LINE 1!
+require('dotenv').config();
 
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
-// The Final Yahoo Finance Engine (Fixed Import)
+// The Final Yahoo Finance Engine (Initialized for 3.15.3+)
 const yfPackage = require('yahoo-finance2');
 const yahooFinance = typeof yfPackage.default === 'function' ? new yfPackage.default() : (yfPackage.default || yfPackage);
 
@@ -13,7 +13,7 @@ const yahooFinance = typeof yfPackage.default === 'function' ? new yfPackage.def
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 // --- THE TRAFFIC JAM BUSTER ---
-// This function waits silently, then tries knocking on Google's door again.
+// Retries the AI if Gemini hits a server traffic jam (503)
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 async function callGeminiWithRetry(prompt, retries = 3) {
@@ -21,21 +21,19 @@ async function callGeminiWithRetry(prompt, retries = 3) {
     for (let i = 0; i < retries; i++) {
         try {
             const result = await model.generateContent(prompt);
-            return result.response.text(); // If it succeeds, return the text immediately!
+            return result.response.text();
         } catch (error) {
-            // If we get a 503 traffic jam, and we haven't run out of tries...
             if (error.message && error.message.includes('503') && i < retries - 1) {
-                console.log(`[Traffic Jam] Gemini is busy. Retrying in 2 seconds... (Attempt ${i + 1} of ${retries})`);
-                await delay(2000); // Pause for 2 seconds, then loop repeats
+                console.log(`[Traffic Jam] Gemini is busy. Retrying... (Attempt ${i + 1})`);
+                await delay(2000);
             } else {
-                throw error; // If it's a real error, crash normally
+                throw error;
             }
         }
     }
 }
-// ------------------------------
 
-// 1. Route to analyze user spending and generate a strategy
+// 1. Route to analyze user spending
 router.post('/analyze/:userId', async (req, res) => {
     try {
         const { userId } = req.params;
@@ -59,11 +57,10 @@ router.post('/analyze/:userId', async (req, res) => {
         
         ${transactionText}
         
-        Based on these recent transactions, give me a short, punchy 3-sentence financial strategy. Tell me what I am doing well, and where I can cut back to reach my goals faster. Keep the tone motivational and stoic.
+        Based on these recent transactions, give me a short, punchy 3-sentence financial strategy. Keep the tone motivational and stoic.
         `;
-
-        // --- TEMPORARY MOCK DATA (Leaving this one mocked for now to save quota) ---
-        const aiAdvice = "Mock Strategy: You are doing well saving for your MCA, but keep an eye on discretionary spending. Stay disciplined. Do not let short-term desires delay the ultimate goal of supporting your family.";
+        
+        const aiAdvice = await callGeminiWithRetry(prompt);
 
         const savedLog = await db.query(
             "INSERT INTO ai_strategy_logs (user_id, ai_response) VALUES ($1, $2) RETURNING *",
@@ -95,10 +92,7 @@ router.post('/smart-entry', async (req, res) => {
         Return ONLY valid JSON.
         `;
 
-        // --- GEMINI IS NOW LIVE FOR SMART ENTRY ---
         const rawAiText = await callGeminiWithRetry(prompt);
-        // ------------------------------------------
-
         let cleanJson = rawAiText.replace(/```json/gi, '').replace(/```/gi, '').trim();
         const parsedData = JSON.parse(cleanJson);
 
@@ -109,7 +103,7 @@ router.post('/smart-entry', async (req, res) => {
     }
 });
 
-// 3. Stoic Market Research Route (Bulletproof Edition!)
+// 3. Stoic Market Research Route (With Timestamp)
 router.post('/research', async (req, res) => {
     try {
         let { query, currentBalance } = req.body;
@@ -126,41 +120,42 @@ router.post('/research', async (req, res) => {
         }
 
         if (validStocks.length === 0) {
-            return res.status(404).json({ message: `Could not find a valid stock for "${query}". Check your spelling.` });
+            return res.status(404).json({ message: `Could not find a valid stock for "${query}".` });
         }
         
         const bestTicker = validStocks[0].symbol;
         const quote = await yahooFinance.quote(bestTicker);
         if (!quote) return res.status(404).json({ message: "Live price data unavailable." });
 
-        // THE FIX: Added safety fallbacks (|| 0) to prevent crashes when the market is closed or missing data
         const price = quote.regularMarketPrice || quote.previousClose || 0;
         const change = quote.regularMarketChangePercent || 0;
         const companyName = quote.longName || quote.shortName || bestTicker;
+        
+        // --- TIMESTAMP INCLUDED HERE ---
+        const lastUpdated = quote.regularMarketTime || new Date(); 
 
         const prompt = `
         You are a stoic financial advisor assisting a BCA student named Namith. 
-        Namith currently has ₹${currentBalance || 0} in his savings. He is saving for his MCA degree and to ultimately spoil his parents.
-        
         Analyze the following asset:
         Company: ${companyName} (${bestTicker})
         Live Price: ₹${price}
         Today's Change: ${change.toFixed(2)}%
 
-        Provide a strictly objective, stoic analysis. 
-        1. Briefly explain what this company does.
-        2. Assess the risk level based on standard market principles.
-        3. Give a stoic warning about the psychology of investing in this right now, keeping his MCA and family goals in mind.
-        Do NOT tell him to buy or sell. Format it in 3 short, readable paragraphs.
+        Provide a strictly objective, stoic analysis. Format in 3 short paragraphs.
         `;
 
-        // --- GEMINI IS NOW LIVE FOR MARKET RESEARCH ---
         const aiAnalysis = await callGeminiWithRetry(prompt);
-        // ----------------------------------------------
         
         res.json({
             message: "Market Analysis Complete",
-            data: { company: companyName, ticker: bestTicker, price: price, change: change, analysis: aiAnalysis }
+            data: { 
+                company: companyName, 
+                ticker: bestTicker, 
+                price: price, 
+                change: change, 
+                time: lastUpdated, // Passed to Frontend
+                analysis: aiAnalysis 
+            }
         });
     } catch (err) {
         console.error("Market Research Error:", err.message);
@@ -178,18 +173,16 @@ router.post('/discover', async (req, res) => {
         Horizon: ${horizon}, Risk: ${risk}, Sector: ${sector}, Capital: ₹${budget}.
         Primary Goal for this investment: ${goal}.
 
-        Suggest exactly 3 Indian stock tickers (ending in .NS) that align perfectly with this specific goal and risk profile.
+        Suggest exactly 3 Indian stock tickers (ending in .NS).
         Return ONLY a JSON array of strings, e.g., ["TCS.NS", "INFY.NS", "RELIANCE.NS"].
         `;
 
-        // --- TEMPORARY MOCK DATA (Leaving this one mocked for now to save quota) ---
-        const rawAiText = `["RELIANCE.NS", "TCS.NS", "INFY.NS"]`;
-
+        const rawAiText = await callGeminiWithRetry(prompt);
         const tickers = JSON.parse(rawAiText.replace(/```json/gi, '').replace(/```/gi, '').trim());
 
         const recommendations = await Promise.all(tickers.map(async (ticker) => {
             const quote = await yahooFinance.quote(ticker);
-            const price = quote.regularMarketPrice || quote.previousClose || 1; // Fallback added here too!
+            const price = quote.regularMarketPrice || quote.previousClose || 1;
             const quantity = Math.floor(budget / price);
             
             return {
@@ -197,12 +190,11 @@ router.post('/discover', async (req, res) => {
                 company: quote.longName || quote.shortName || ticker,
                 price: price,
                 quantity: quantity,
-                reason: `Fits a ${risk} profile to help achieve your goal: ${goal}.` 
+                reason: `Fits a ${risk} profile for your goal: ${goal}.` 
             };
         }));
 
         res.json({ message: "Discovery Complete", recommendations });
-
     } catch (err) {
         console.error("Discovery Error:", err.message);
         res.status(500).json({ message: "Failed to build your portfolio." });
