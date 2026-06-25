@@ -35,7 +35,6 @@ async function callGeminiWithRetry(prompt, retries = 3) {
 }
 // ------------------------------
 
-
 // 1. Route to analyze user spending and generate a strategy
 router.post('/analyze/:userId', async (req, res) => {
     try {
@@ -63,10 +62,7 @@ router.post('/analyze/:userId', async (req, res) => {
         Based on these recent transactions, give me a short, punchy 3-sentence financial strategy. Tell me what I am doing well, and where I can cut back to reach my goals faster. Keep the tone motivational and stoic.
         `;
 
-        // USING THE NEW TRAFFIC JAM BUSTER! (Temporarily Disabled for Quota)
-        // const aiAdvice = await callGeminiWithRetry(prompt);
-        
-        // --- TEMPORARY MOCK DATA ---
+        // --- TEMPORARY MOCK DATA (Leaving this one mocked for now to save quota) ---
         const aiAdvice = "Mock Strategy: You are doing well saving for your MCA, but keep an eye on discretionary spending. Stay disciplined. Do not let short-term desires delay the ultimate goal of supporting your family.";
 
         const savedLog = await db.query(
@@ -99,9 +95,9 @@ router.post('/smart-entry', async (req, res) => {
         Return ONLY valid JSON.
         `;
 
-        // --- GEMINI IS NOW LIVE ---
+        // --- GEMINI IS NOW LIVE FOR SMART ENTRY ---
         const rawAiText = await callGeminiWithRetry(prompt);
-        // --------------------------
+        // ------------------------------------------
 
         let cleanJson = rawAiText.replace(/```json/gi, '').replace(/```/gi, '').trim();
         const parsedData = JSON.parse(cleanJson);
@@ -137,9 +133,10 @@ router.post('/research', async (req, res) => {
         const quote = await yahooFinance.quote(bestTicker);
         if (!quote) return res.status(404).json({ message: "Live price data unavailable." });
 
-        const price = quote.regularMarketPrice;
-        const change = quote.regularMarketChangePercent;
-        const companyName = quote.longName || quote.shortName;
+        // THE FIX: Added safety fallbacks (|| 0) to prevent crashes when the market is closed or missing data
+        const price = quote.regularMarketPrice || quote.previousClose || 0;
+        const change = quote.regularMarketChangePercent || 0;
+        const companyName = quote.longName || quote.shortName || bestTicker;
 
         const prompt = `
         You are a stoic financial advisor assisting a BCA student named Namith. 
@@ -157,11 +154,9 @@ router.post('/research', async (req, res) => {
         Do NOT tell him to buy or sell. Format it in 3 short, readable paragraphs.
         `;
 
-        // USING THE NEW TRAFFIC JAM BUSTER! (Temporarily Disabled for Quota)
-        // const aiAnalysis = await callGeminiWithRetry(prompt);
-
-        // --- TEMPORARY MOCK DATA ---
-        const aiAnalysis = "Mock Analysis: This company operates in a major sector of the Indian economy and shows consistent volume.\n\nInvesting in single equities always carries inherent volatility and standard market risks apply.\n\nRemember your stoic principles: do not let daily price fluctuations distract you from your MCA fund. Stay the course.";
+        // --- GEMINI IS NOW LIVE FOR MARKET RESEARCH ---
+        const aiAnalysis = await callGeminiWithRetry(prompt);
+        // ----------------------------------------------
         
         res.json({
             message: "Market Analysis Complete",
@@ -187,22 +182,19 @@ router.post('/discover', async (req, res) => {
         Return ONLY a JSON array of strings, e.g., ["TCS.NS", "INFY.NS", "RELIANCE.NS"].
         `;
 
-        // USING THE NEW TRAFFIC JAM BUSTER! (Temporarily Disabled for Quota)
-        // const rawAiText = await callGeminiWithRetry(prompt);
-
-        // --- TEMPORARY MOCK DATA ---
+        // --- TEMPORARY MOCK DATA (Leaving this one mocked for now to save quota) ---
         const rawAiText = `["RELIANCE.NS", "TCS.NS", "INFY.NS"]`;
 
         const tickers = JSON.parse(rawAiText.replace(/```json/gi, '').replace(/```/gi, '').trim());
 
         const recommendations = await Promise.all(tickers.map(async (ticker) => {
             const quote = await yahooFinance.quote(ticker);
-            const price = quote.regularMarketPrice;
+            const price = quote.regularMarketPrice || quote.previousClose || 1; // Fallback added here too!
             const quantity = Math.floor(budget / price);
             
             return {
                 ticker,
-                company: quote.longName || quote.shortName,
+                company: quote.longName || quote.shortName || ticker,
                 price: price,
                 quantity: quantity,
                 reason: `Fits a ${risk} profile to help achieve your goal: ${goal}.` 
