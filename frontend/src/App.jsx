@@ -36,6 +36,7 @@ function App() {
   const [isResearchLoading, setIsResearchLoading] = useState(false);
   const [researchResult, setResearchResult] = useState(null);
   const [radarCapital, setRadarCapital] = useState('');
+
   // --- Mode 2: Guided Discovery States ---
   const [advisorStep, setAdvisorStep] = useState(0); 
   const [discoveryAnswers, setDiscoveryAnswers] = useState({
