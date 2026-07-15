@@ -103,6 +103,26 @@ function App() {
     }
   };
 
+  // --- Delete Goal Function ---
+  const handleDeleteGoal = async (goalId) => {
+    const isConfirmed = window.confirm("Are you sure you want to delete this milestone?");
+    if (!isConfirmed) return;
+
+    try {
+      const response = await fetch(`https://legacy-ledger.onrender.com/api/goals/${goalId}`, {
+        method: 'DELETE',
+      });
+      
+      if (response.ok) {
+        setGoals(goals.filter(goal => goal.id !== goalId));
+      } else {
+        alert("Failed to delete the goal.");
+      }
+    } catch (error) {
+      alert("Lost connection to the server while trying to delete.");
+    }
+  };
+
   // Mode 1: Market Radar Function
   const handleResearch = async (e) => { 
     e.preventDefault(); 
@@ -430,9 +450,23 @@ function App() {
               const progressPercentage = Math.min((goal.current_amount / goal.target_amount) * 100, 100).toFixed(1);
               return (
                 <div key={goal.id} style={{ backgroundColor: '#1e1e1e', padding: '20px', borderRadius: '10px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
                     <h3 style={{ margin: '0', fontSize: '1.2rem', color: '#fff' }}>{goal.title}</h3>
-                    <span style={{ color: '#60a5fa', fontWeight: 'bold' }}>{progressPercentage}%</span>
+                    
+                    {/* The new Percentage and Delete Button wrapper */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                      <span style={{ color: '#60a5fa', fontWeight: 'bold' }}>{progressPercentage}%</span>
+                      <motion.button 
+                        whileHover={{ scale: 1.2 }} 
+                        whileTap={{ scale: 0.9 }}
+                        onClick={() => handleDeleteGoal(goal.id)}
+                        style={{ background: 'none', border: 'none', color: '#f87171', cursor: 'pointer', fontSize: '1.2rem', padding: 0 }}
+                        title="Delete Goal"
+                      >
+                        ✖
+                      </motion.button>
+                    </div>
+
                   </div>
                   <div style={{ width: '100%', backgroundColor: '#333', height: '12px', borderRadius: '6px' }}>
                     <div style={{ width: `${progressPercentage}%`, backgroundColor: '#60a5fa', height: '100%', borderRadius: '6px' }}></div>
