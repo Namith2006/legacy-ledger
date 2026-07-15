@@ -14,6 +14,18 @@ const generateMockHistory = (currentPrice) => {
   });
 };
 
+// --- STANDALONE INTERACTIVE BUTTON ---
+const StepButton = ({ label, onClick }) => (
+  <motion.button 
+    onClick={onClick} 
+    whileHover={{ scale: 1.02, backgroundColor: '#60a5fa', color: '#121212' }} 
+    whileTap={{ scale: 0.95 }} 
+    style={{ padding: '12px 20px', backgroundColor: '#333', color: 'white', border: '1px solid #555', borderRadius: '8px', cursor: 'pointer', flex: '1 1 150px', fontSize: '1rem', transition: 'background-color 0.2s, color 0.2s' }}
+  >
+    {label}
+  </motion.button>
+);
+
 function App() {
   // --- Standard States ---
   const [balanceData, setBalanceData] = useState(null);
@@ -23,7 +35,7 @@ function App() {
   const [smartInput, setSmartInput] = useState('');
   const [isSmartLoading, setIsSmartLoading] = useState(false);
 
-  // --- NEW: Goal Form States ---
+  // --- Goal Form States ---
   const [isAddingGoal, setIsAddingGoal] = useState(false);
   const [newGoalData, setNewGoalData] = useState({ title: '', target: '', saved: '' });
 
@@ -156,12 +168,6 @@ function App() {
   };
 
   const resetAdvisor = () => { setAdvisorStep(0); setDiscoveryAnswers({ horizon: '', risk: '', sector: '', budget: '', goal: '' }); setDiscoveryResults(null); };
-
-  const StepButton = ({ label, onClick }) => (
-    <motion.button onClick={onClick} whileHover={{ scale: 1.02, backgroundColor: '#60a5fa', color: '#121212' }} whileTap={{ scale: 0.95 }} style={{ padding: '12px 20px', backgroundColor: '#333', color: 'white', border: '1px solid #555', borderRadius: '8px', cursor: 'pointer', flex: 1, fontSize: '1rem', transition: 'background-color 0.2s, color 0.2s' }}>
-      {label}
-    </motion.button>
-  );
 
   return (
     <div className="dashboard-container" style={{ maxWidth: '800px', margin: '0 auto', padding: '40px', fontFamily: 'sans-serif' }}>
