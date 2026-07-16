@@ -175,7 +175,7 @@ router.post('/research', async (req, res) => {
     }
 });
 
-// 4. Robo-Advisor Guided Discovery Route (Using Twelve Data API)
+// 4. Robo-Advisor Guided Discovery Route (Optimized for 8 req/min Rate Limits)
 router.post('/discover', async (req, res) => {
     try {
         const { horizon, risk, sector, budget, goal } = req.body;
@@ -183,33 +183,58 @@ router.post('/discover', async (req, res) => {
         const prompt = `
         You are an Indian Stock Market expert. Based on this profile:
         Horizon: ${horizon}, Risk: ${risk}, Sector: ${sector}, Capital: ₹${budget}.
-        Primary Goal for this investment: ${goal}.
+        Primary Goal: ${goal}.
 
-        Suggest exactly 3 Indian stock tickers (ending in .NS).
-        Return ONLY a JSON array of strings, e.g., ["TCS.NS", "INFY.NS", "RELIANCE.NS"].
+        Suggest exactly 3 Indian stock tickers that are actively traded on the NSE.
+        Provide ONLY the raw ticker symbol (no ".NS" at the end, no company names).
+        Return ONLY a valid JSON array of strings.
+        Example format: ["TCS", "INFY", "RELIANCE"]
         `;
 
         const rawAiText = await generateAIContent(prompt, true);
         const tickers = JSON.parse(rawAiText.replace(/```json/gi, '').replace(/```/gi, '').trim());
 
-        const recommendations = await Promise.all(tickers.map(async (ticker) => {
-            const cleanSymbol = ticker.replace('.NS', '');
-            const url = `https://api.twelvedata.com/quote?symbol=${cleanSymbol}&exchange=NSE&apikey=${process.env.TWELVEDATA_API_KEY}`;
-            const tdResponse = await fetch(url);
-            const quote = await tdResponse.json();
-            
-            const price = quote.close ? parseFloat(quote.close) : 1;
-            const quantity = Math.floor(budget / price);
-            const companyName = quote.name || ticker;
-            
-            return {
-                ticker,
-                company: companyName,
-                price: price,
-                quantity: quantity,
-                reason: `Fits a ${risk} profile for your goal: ${goal}.` 
-            };
-        }));
+        const recommendations = [];
+        const apiKey = process.env.TWELVEDATA_DISCOVERY_KEY || process.env.TWELVEDATA_API_KEY;
+        
+        for (let ticker of tickers) {
+            try {
+                // Clean the symbol just in case the AI added extra text
+                let cleanSymbol = ticker.replace('.NS', '').trim().toUpperCase();
+                
+                // Directly fetch quote, completely skipping the search step to save API credits
+                const quoteUrl = `https://api.twelvedata.com/quote?symbol=${cleanSymbol}&exchange=NSE&apikey=${apiKey}`;
+                const quoteResponse = await fetch(quoteUrl);
+                const quote = await quoteResponse.json();
+                
+                if (quote.status === 'error' || !quote.close) {
+                    console.log(`TwelveData skipped ${cleanSymbol}:`, quote.message);
+                    continue; 
+                }
+
+                const price = parseFloat(quote.close);
+                const quantity = Math.floor(budget / price);
+                
+                recommendations.push({
+                    ticker: cleanSymbol + '.NS',
+                    company: quote.name || cleanSymbol,
+                    price: price,
+                    quantity: quantity,
+                    reason: `Fits a ${risk} profile for your goal: ${goal}.` 
+                });
+                
+                // Tiny 800ms delay to pace the requests and avoid triggering spam filters
+                await new Promise(resolve => setTimeout(resolve, 800));
+                
+            } catch (e) {
+                console.log(`Failed to fetch data for ${ticker}:`, e.message);
+            }
+        }
+
+        if (recommendations.length === 0) {
+             // Return a 400 with a clear message instead of crashing the server with a 500
+             return res.status(400).json({ message: "Market data limit reached. Please wait 60 seconds and try again." });
+        }
 
         res.json({ message: "Discovery Complete", recommendations });
     } catch (err) {
