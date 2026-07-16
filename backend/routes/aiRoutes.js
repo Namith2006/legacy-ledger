@@ -3,23 +3,17 @@ require('dotenv').config();
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
-const { GoogleGenerativeAI } = require('@google/generative-ai');
 const Groq = require('groq-sdk');
 
 // The Final Yahoo Finance Engine (Initialized for 3.15.3+)
 const yfPackage = require('yahoo-finance2');
 const yahooFinance = typeof yfPackage.default === 'function' ? new yfPackage.default() : (yfPackage.default || yfPackage);
 
-// Initialize both AI SDKs
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+// Initialize Groq SDK (Google Gemini removed)
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
-const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-
-// --- DUAL-CORE ENGINE: GROQ (PRIMARY) ➡️ GEMINI (SECONDARY) ---
+// --- SINGLE-CORE ENGINE: GROQ EXCLUSIVE ---
 async function generateAIContent(prompt, isJsonResponse = false) {
-    
-    // Phase 1: Try Groq First (Ultra-fast Primary)
     try {
         const options = {
             messages: [
@@ -45,30 +39,9 @@ async function generateAIContent(prompt, isJsonResponse = false) {
         return chatCompletion.choices[0].message.content;
         
     } catch (groqError) {
-        console.error(`❌ Groq primary engine failed: ${groqError.message}`);
-        console.log("⚠️ Activating fallback: Shifting request to Google Gemini...");
+        console.error(`❌ Groq engine failed: ${groqError.message}`);
+        throw new Error("AI engine is currently down. Please try again later.");
     }
-
-    // Phase 2: Secondary Fallback to Gemini with retry loops
-    const retries = 3;
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-    
-    for (let i = 0; i < retries; i++) {
-        try {
-            const result = await model.generateContent(prompt);
-            return result.response.text();
-        } catch (error) {
-            if (error.message && error.message.includes('503') && i < retries - 1) {
-                console.log(`[Traffic Jam] Gemini fallback is busy. Retrying... (Attempt ${i + 1})`);
-                await delay(2000);
-            } else {
-                console.error(`❌ Gemini fallback failed hard on attempt ${i + 1}: ${error.message}`);
-                break;
-            }
-        }
-    }
-
-    throw new Error("Both AI engines are down. Please try again later.");
 }
 
 // 1. Route to analyze user spending
