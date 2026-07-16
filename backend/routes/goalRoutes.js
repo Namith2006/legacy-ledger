@@ -17,7 +17,7 @@ router.get('/:userId', async (req, res) => {
     }
 });
 
-// 2. CREATE ROUTE: Add a new goal (THE NEW FEATURE)
+// 2. CREATE ROUTE: Add a new goal
 router.post('/', async (req, res) => {
     try {
         const { user_id, title, target_amount, current_amount } = req.body;
@@ -30,6 +30,48 @@ router.post('/', async (req, res) => {
         res.status(201).json(newGoal.rows[0]);
     } catch (err) {
         console.error("Create Goal Error:", err.message);
+        res.status(500).send("Server Error");
+    }
+});
+
+// 3. UPDATE ROUTE: Add funds to a goal
+router.put('/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { current_amount } = req.body;
+        
+        const result = await db.query(
+            "UPDATE goals SET current_amount = $1 WHERE id = $2 RETURNING *",
+            [current_amount, id]
+        );
+        
+        if (result.rows.length === 0) {
+            return res.status(404).json({ message: "Goal not found" });
+        }
+        
+        res.json(result.rows[0]);
+    } catch (err) {
+        console.error("Error updating goal:", err.message);
+        res.status(500).json({ message: "Failed to update goal." });
+    }
+});
+
+// 4. DELETE ROUTE: Remove a goal completely
+router.delete('/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const result = await db.query(
+            "DELETE FROM goals WHERE id = $1 RETURNING *",
+            [id]
+        );
+        
+        if (result.rows.length === 0) {
+            return res.status(404).json({ message: "Goal not found" });
+        }
+        
+        res.json({ message: "Goal deleted successfully" });
+    } catch (err) {
+        console.error("Delete Goal Error:", err.message);
         res.status(500).send("Server Error");
     }
 });
