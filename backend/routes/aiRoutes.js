@@ -4,20 +4,24 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
+const Groq = require('groq-sdk');
 
 // The Final Yahoo Finance Engine (Initialized for 3.15.3+)
 const yfPackage = require('yahoo-finance2');
 const yahooFinance = typeof yfPackage.default === 'function' ? new yfPackage.default() : (yfPackage.default || yfPackage);
 
-// Initialize the AI
+// Initialize both AI SDKs
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
-// --- THE TRAFFIC JAM BUSTER ---
-// Retries the AI if Gemini hits a server traffic jam (503)
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-async function callGeminiWithRetry(prompt, retries = 3) {
+// --- THE TRAFFIC JAM BUSTER ENGINE (WITH DUAL CORE FALLBACK) ---
+async function generateAIContent(prompt, isJsonResponse = false) {
+    // Phase 1: Try Gemini with retry loops
+    const retries = 3;
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+    
     for (let i = 0; i < retries; i++) {
         try {
             const result = await model.generateContent(prompt);
@@ -27,9 +31,41 @@ async function callGeminiWithRetry(prompt, retries = 3) {
                 console.log(`[Traffic Jam] Gemini is busy. Retrying... (Attempt ${i + 1})`);
                 await delay(2000);
             } else {
-                throw error;
+                // Break out of loop to activate Phase 2 fallback
+                console.error(`❌ Gemini failed hard on attempt ${i + 1}: ${error.message}`);
+                break;
             }
         }
+    }
+
+    // Phase 2: Ultimate Fallback to Groq
+    console.log("⚠️ Gemini is completely locked in traffic. Falling back to Groq Llama 3...");
+    try {
+        const options = {
+            messages: [
+                {
+                    role: "system",
+                    content: isJsonResponse 
+                        ? "You are a precise financial data extraction AI. You must respond ONLY in a clean, valid JSON object or array matching the schema requested. Do not include markdown wraps."
+                        : "You are a stoic financial coach assisting a student. Provide structured text answers strictly as requested."
+                },
+                {
+                    role: "user",
+                    content: prompt
+                }
+            ],
+            model: "llama-3.1-8b-instant"
+        };
+
+        if (isJsonResponse) {
+            options.response_format = { type: "json_object" };
+        }
+
+        const chatCompletion = await groq.chat.completions.create(options);
+        return chatCompletion.choices[0].message.content;
+    } catch (groqError) {
+        console.error("❌ Groq fallback engine also failed:", groqError.message);
+        throw new Error("Both AI engines are down. Please try again later.");
     }
 }
 
@@ -60,7 +96,7 @@ router.post('/analyze/:userId', async (req, res) => {
         Based on these recent transactions, give me a short, punchy 3-sentence financial strategy. Keep the tone motivational and stoic.
         `;
         
-        const aiAdvice = await callGeminiWithRetry(prompt);
+        const aiAdvice = await generateAIContent(prompt, false);
 
         const savedLog = await db.query(
             "INSERT INTO ai_strategy_logs (user_id, ai_response) VALUES ($1, $2) RETURNING *",
@@ -81,7 +117,6 @@ router.post('/smart-entry', async (req, res) => {
         if (!rawText) return res.status(400).json({ message: "Please provide transaction text." });
 
         const prompt = `
-        You are a precise financial data extraction AI. 
         Read the following user input and convert it into a strict JSON object.
         User Input: "${rawText}"
         Rules:
@@ -92,7 +127,7 @@ router.post('/smart-entry', async (req, res) => {
         Return ONLY valid JSON.
         `;
 
-        const rawAiText = await callGeminiWithRetry(prompt);
+        const rawAiText = await generateAIContent(prompt, true);
         let cleanJson = rawAiText.replace(/```json/gi, '').replace(/```/gi, '').trim();
         const parsedData = JSON.parse(cleanJson);
 
@@ -131,7 +166,6 @@ router.post('/research', async (req, res) => {
         const change = quote.regularMarketChangePercent || 0;
         const companyName = quote.longName || quote.shortName || bestTicker;
         
-        // --- TIMESTAMP INCLUDED HERE ---
         const lastUpdated = quote.regularMarketTime || new Date(); 
 
         const prompt = `
@@ -144,7 +178,7 @@ router.post('/research', async (req, res) => {
         Provide a strictly objective, stoic analysis. Format in 3 short paragraphs.
         `;
 
-        const aiAnalysis = await callGeminiWithRetry(prompt);
+        const aiAnalysis = await generateAIContent(prompt, false);
         
         res.json({
             message: "Market Analysis Complete",
@@ -153,7 +187,7 @@ router.post('/research', async (req, res) => {
                 ticker: bestTicker, 
                 price: price, 
                 change: change, 
-                time: lastUpdated, // Passed to Frontend
+                time: lastUpdated, 
                 analysis: aiAnalysis 
             }
         });
@@ -177,7 +211,7 @@ router.post('/discover', async (req, res) => {
         Return ONLY a JSON array of strings, e.g., ["TCS.NS", "INFY.NS", "RELIANCE.NS"].
         `;
 
-        const rawAiText = await callGeminiWithRetry(prompt);
+        const rawAiText = await generateAIContent(prompt, true);
         const tickers = JSON.parse(rawAiText.replace(/```json/gi, '').replace(/```/gi, '').trim());
 
         const recommendations = await Promise.all(tickers.map(async (ticker) => {
