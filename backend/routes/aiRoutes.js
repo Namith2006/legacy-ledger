@@ -5,11 +5,7 @@ const router = express.Router();
 const db = require('../db');
 const Groq = require('groq-sdk');
 
-// The Final Yahoo Finance Engine (Initialized for 3.15.3+)
-const yfPackage = require('yahoo-finance2');
-const yahooFinance = typeof yfPackage.default === 'function' ? new yfPackage.default() : (yfPackage.default || yfPackage);
-
-// Initialize Groq SDK (Google Gemini removed)
+// Initialize Groq SDK
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
 // --- SINGLE-CORE ENGINE: GROQ EXCLUSIVE ---
@@ -113,40 +109,34 @@ router.post('/smart-entry', async (req, res) => {
     }
 });
 
-// 3. Stoic Market Research Route (With Timestamp)
+// 3. Stoic Market Research Route (Using Twelve Data API)
 router.post('/research', async (req, res) => {
     try {
         let { query, currentBalance } = req.body;
-        if (!query) return res.status(400).json({ message: "Please provide a company name or ticker." });
+        if (!query) return res.status(400).json({ message: "Please provide a company ticker (e.g., TCS)." });
 
         query = query.trim().toUpperCase();
+        // Remove .NS if the user typed it, as Twelve Data uses 'exchange=NSE'
+        let cleanSymbol = query.replace('.NS', '');
 
-        let searchResults = await yahooFinance.search(query);
-        let validStocks = searchResults.quotes.filter(q => ['EQUITY', 'ETF'].includes(q.quoteType));
+        const url = `https://api.twelvedata.com/quote?symbol=${cleanSymbol}&exchange=NSE&apikey=${process.env.TWELVEDATA_API_KEY}`;
+        const tdResponse = await fetch(url);
+        const data = await tdResponse.json();
 
-        if (validStocks.length === 0 && !query.includes('.')) {
-            searchResults = await yahooFinance.search(query + '.NS');
-            validStocks = searchResults.quotes.filter(q => ['EQUITY', 'ETF'].includes(q.quoteType));
-        }
-
-        if (validStocks.length === 0) {
-            return res.status(404).json({ message: `Could not find a valid stock for "${query}".` });
+        if (data.status === 'error' || !data.close) {
+            return res.status(404).json({ message: `Could not find a valid NSE stock for "${query}".` });
         }
         
-        const bestTicker = validStocks[0].symbol;
-        const quote = await yahooFinance.quote(bestTicker);
-        if (!quote) return res.status(404).json({ message: "Live price data unavailable." });
-
-        const price = quote.regularMarketPrice || quote.previousClose || 0;
-        const change = quote.regularMarketChangePercent || 0;
-        const companyName = quote.longName || quote.shortName || bestTicker;
+        const price = parseFloat(data.close);
+        const change = parseFloat(data.percent_change);
+        const companyName = data.name;
         
-        const lastUpdated = quote.regularMarketTime || new Date(); 
+        const lastUpdated = new Date(); 
 
         const prompt = `
         You are a stoic financial advisor assisting a BCA student named Namith. 
         Analyze the following asset:
-        Company: ${companyName} (${bestTicker})
+        Company: ${companyName} (${data.symbol})
         Live Price: ₹${price}
         Today's Change: ${change.toFixed(2)}%
 
@@ -159,7 +149,7 @@ router.post('/research', async (req, res) => {
             message: "Market Analysis Complete",
             data: { 
                 company: companyName, 
-                ticker: bestTicker, 
+                ticker: data.symbol + ".NS", 
                 price: price, 
                 change: change, 
                 time: lastUpdated, 
@@ -172,7 +162,7 @@ router.post('/research', async (req, res) => {
     }
 });
 
-// 4. Robo-Advisor Guided Discovery Route
+// 4. Robo-Advisor Guided Discovery Route (Using Twelve Data API)
 router.post('/discover', async (req, res) => {
     try {
         const { horizon, risk, sector, budget, goal } = req.body;
@@ -190,13 +180,18 @@ router.post('/discover', async (req, res) => {
         const tickers = JSON.parse(rawAiText.replace(/```json/gi, '').replace(/```/gi, '').trim());
 
         const recommendations = await Promise.all(tickers.map(async (ticker) => {
-            const quote = await yahooFinance.quote(ticker);
-            const price = quote.regularMarketPrice || quote.previousClose || 1;
+            const cleanSymbol = ticker.replace('.NS', '');
+            const url = `https://api.twelvedata.com/quote?symbol=${cleanSymbol}&exchange=NSE&apikey=${process.env.TWELVEDATA_API_KEY}`;
+            const tdResponse = await fetch(url);
+            const quote = await tdResponse.json();
+            
+            const price = quote.close ? parseFloat(quote.close) : 1;
             const quantity = Math.floor(budget / price);
+            const companyName = quote.name || ticker;
             
             return {
                 ticker,
-                company: quote.longName || quote.shortName || ticker,
+                company: companyName,
                 price: price,
                 quantity: quantity,
                 reason: `Fits a ${risk} profile for your goal: ${goal}.` 
