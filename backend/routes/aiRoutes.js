@@ -109,22 +109,35 @@ router.post('/smart-entry', async (req, res) => {
     }
 });
 
-// 3. Stoic Market Research Route (Using Twelve Data API)
+// 3. Stoic Market Research Route (Using Twelve Data API with Smart Search)
 router.post('/research', async (req, res) => {
     try {
         let { query, currentBalance } = req.body;
-        if (!query) return res.status(400).json({ message: "Please provide a company ticker (e.g., TCS)." });
+        if (!query) return res.status(400).json({ message: "Please provide a company ticker or name." });
 
         query = query.trim().toUpperCase();
-        // Remove .NS if the user typed it, as Twelve Data uses 'exchange=NSE'
         let cleanSymbol = query.replace('.NS', '');
 
-        const url = `https://api.twelvedata.com/quote?symbol=${cleanSymbol}&exchange=NSE&apikey=${process.env.TWELVEDATA_API_KEY}`;
+        // STEP 1: Translate the user's text into an exact NSE ticker symbol
+        const searchUrl = `https://api.twelvedata.com/symbol_search?symbol=${encodeURIComponent(cleanSymbol)}&exchange=NSE`;
+        const searchResponse = await fetch(searchUrl);
+        const searchData = await searchResponse.json();
+
+        // If the search returns empty, the company isn't on the NSE
+        if (!searchData.data || searchData.data.length === 0) {
+            return res.status(404).json({ message: `Could not find a valid NSE stock for "${query}".` });
+        }
+
+        // Grab the closest matching ticker (e.g., "BEL")
+        const bestTicker = searchData.data[0].symbol;
+
+        // STEP 2: Fetch the live quote using the exact ticker
+        const url = `https://api.twelvedata.com/quote?symbol=${bestTicker}&exchange=NSE&apikey=${process.env.TWELVEDATA_API_KEY}`;
         const tdResponse = await fetch(url);
         const data = await tdResponse.json();
 
         if (data.status === 'error' || !data.close) {
-            return res.status(404).json({ message: `Could not find a valid NSE stock for "${query}".` });
+            return res.status(404).json({ message: `Live data currently unavailable for ${bestTicker}.` });
         }
         
         const price = parseFloat(data.close);
@@ -136,7 +149,7 @@ router.post('/research', async (req, res) => {
         const prompt = `
         You are a stoic financial advisor assisting a BCA student named Namith. 
         Analyze the following asset:
-        Company: ${companyName} (${data.symbol})
+        Company: ${companyName} (${bestTicker})
         Live Price: ₹${price}
         Today's Change: ${change.toFixed(2)}%
 
@@ -149,7 +162,7 @@ router.post('/research', async (req, res) => {
             message: "Market Analysis Complete",
             data: { 
                 company: companyName, 
-                ticker: data.symbol + ".NS", 
+                ticker: bestTicker + ".NS", 
                 price: price, 
                 change: change, 
                 time: lastUpdated, 
