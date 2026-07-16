@@ -16,30 +16,10 @@ const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-// --- THE TRAFFIC JAM BUSTER ENGINE (WITH DUAL CORE FALLBACK) ---
+// --- DUAL-CORE ENGINE: GROQ (PRIMARY) ➡️ GEMINI (SECONDARY) ---
 async function generateAIContent(prompt, isJsonResponse = false) {
-    // Phase 1: Try Gemini with retry loops
-    const retries = 3;
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
     
-    for (let i = 0; i < retries; i++) {
-        try {
-            const result = await model.generateContent(prompt);
-            return result.response.text();
-        } catch (error) {
-            if (error.message && error.message.includes('503') && i < retries - 1) {
-                console.log(`[Traffic Jam] Gemini is busy. Retrying... (Attempt ${i + 1})`);
-                await delay(2000);
-            } else {
-                // Break out of loop to activate Phase 2 fallback
-                console.error(`❌ Gemini failed hard on attempt ${i + 1}: ${error.message}`);
-                break;
-            }
-        }
-    }
-
-    // Phase 2: Ultimate Fallback to Groq
-    console.log("⚠️ Gemini is completely locked in traffic. Falling back to Groq Llama 3...");
+    // Phase 1: Try Groq First (Ultra-fast Primary)
     try {
         const options = {
             messages: [
@@ -63,10 +43,32 @@ async function generateAIContent(prompt, isJsonResponse = false) {
 
         const chatCompletion = await groq.chat.completions.create(options);
         return chatCompletion.choices[0].message.content;
+        
     } catch (groqError) {
-        console.error("❌ Groq fallback engine also failed:", groqError.message);
-        throw new Error("Both AI engines are down. Please try again later.");
+        console.error(`❌ Groq primary engine failed: ${groqError.message}`);
+        console.log("⚠️ Activating fallback: Shifting request to Google Gemini...");
     }
+
+    // Phase 2: Secondary Fallback to Gemini with retry loops
+    const retries = 3;
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+    
+    for (let i = 0; i < retries; i++) {
+        try {
+            const result = await model.generateContent(prompt);
+            return result.response.text();
+        } catch (error) {
+            if (error.message && error.message.includes('503') && i < retries - 1) {
+                console.log(`[Traffic Jam] Gemini fallback is busy. Retrying... (Attempt ${i + 1})`);
+                await delay(2000);
+            } else {
+                console.error(`❌ Gemini fallback failed hard on attempt ${i + 1}: ${error.message}`);
+                break;
+            }
+        }
+    }
+
+    throw new Error("Both AI engines are down. Please try again later.");
 }
 
 // 1. Route to analyze user spending
