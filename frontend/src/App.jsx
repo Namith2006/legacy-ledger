@@ -123,6 +123,33 @@ function App() {
     }
   };
 
+  // --- Add Funds to Goal Function ---
+  const handleAddFunds = async (goalId, currentAmount) => {
+    const addedFunds = window.prompt("Enter the amount to add to this goal: ₹");
+    
+    if (!addedFunds || isNaN(addedFunds) || addedFunds <= 0) return;
+
+    const newTotal = parseFloat(currentAmount) + parseFloat(addedFunds);
+
+    try {
+      const response = await fetch(`https://legacy-ledger.onrender.com/api/goals/${goalId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ current_amount: newTotal })
+      });
+      
+      if (response.ok) {
+        setGoals(goals.map(goal => 
+          goal.id === goalId ? { ...goal, current_amount: newTotal } : goal
+        ));
+      } else {
+        alert("Failed to update goal.");
+      }
+    } catch (error) {
+      alert("Lost connection to the server.");
+    }
+  };
+
   // Mode 1: Market Radar Function
   const handleResearch = async (e) => { 
     e.preventDefault(); 
@@ -453,9 +480,22 @@ function App() {
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
                     <h3 style={{ margin: '0', fontSize: '1.2rem', color: '#fff' }}>{goal.title}</h3>
                     
-                    {/* The new Percentage and Delete Button wrapper */}
+                    {/* The Interactive Actions Cluster */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
                       <span style={{ color: '#60a5fa', fontWeight: 'bold' }}>{progressPercentage}%</span>
+                      
+                      {/* --- ADD FUNDS INTERACTION ACTION --- */}
+                      <motion.button 
+                        whileHover={{ scale: 1.1 }} 
+                        whileTap={{ scale: 0.95 }}
+                        onClick={() => handleAddFunds(goal.id, goal.current_amount)}
+                        style={{ backgroundColor: '#4ade80', color: '#121212', border: 'none', padding: '4px 10px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 'bold' }}
+                        title="Add Funds"
+                      >
+                        + ₹
+                      </motion.button>
+
+                      {/* --- DELETE ELEMENT ACTION --- */}
                       <motion.button 
                         whileHover={{ scale: 1.2 }} 
                         whileTap={{ scale: 0.9 }}
