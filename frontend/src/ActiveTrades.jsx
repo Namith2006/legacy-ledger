@@ -1,101 +1,157 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
 
 const ActiveTrades = () => {
   const [trades, setTrades] = useState([]);
+  const [isAdding, setIsAdding] = useState(false);
+  const [newTrade, setNewTrade] = useState({ ticker: '', buy_price: '', quantity: '' });
+  const [isLoading, setIsLoading] = useState(true);
 
+  const fetchTrades = async () => {
+    try {
+      const res = await fetch('https://legacy-ledger.onrender.com/api/trades/1');
+      if (res.ok) {
+        const data = await res.json();
+        setTrades(data);
+      }
+    } catch (error) {
+      console.error("Failed to fetch trades:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Fetch immediately, then refresh market data every 60 seconds
   useEffect(() => {
-    // Make sure this matches your dynamic user ID logic
-    const userId = 1; 
-
-    fetch(`https://legacy-ledger.onrender.com/api/transactions/${userId}`)
-      .then(res => {
-        if (!res.ok) throw new Error("Server error");
-        return res.json();
-      })
-      .then(data => {
-        if (Array.isArray(data)) {
-          setTrades(data);
-        } else {
-          setTrades([]); 
-        }
-      })
-      .catch(err => {
-        console.error("Fetch error:", err);
-        setTrades([]);
-      });
+    fetchTrades();
+    const interval = setInterval(fetchTrades, 60000);
+    return () => clearInterval(interval);
   }, []);
 
-  // --- THE FIX: Isolate only the actual stock trades ---
-  // This filters out regular income/expense transactions
-  const activeStockTrades = trades.filter(trade => trade.asset_name);
+  const handleAddTrade = async (e) => {
+    e.preventDefault();
+    try {
+      const res = await fetch('https://legacy-ledger.onrender.com/api/trades', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: 1,
+          ticker: newTrade.ticker,
+          buy_price: parseFloat(newTrade.buy_price),
+          quantity: parseInt(newTrade.quantity, 10)
+        })
+      });
+      if (res.ok) {
+        setNewTrade({ ticker: '', buy_price: '', quantity: '' });
+        setIsAdding(false);
+        fetchTrades(); 
+      }
+    } catch (error) {
+      alert("Failed to deploy capital.");
+    }
+  };
+
+  const handleDeleteTrade = async (id) => {
+    if (!window.confirm("Close this position?")) return;
+    try {
+      const res = await fetch(`https://legacy-ledger.onrender.com/api/trades/${id}`, {
+        method: 'DELETE'
+      });
+      if (res.ok) {
+        setTrades(trades.filter(t => t.id !== id));
+      }
+    } catch (error) {
+      alert("Failed to close position.");
+    }
+  };
+
+  // Master Portfolio Math
+  const totalInvested = trades.reduce((acc, t) => acc + (t.buy_price * t.quantity), 0);
+  const totalCurrent = trades.reduce((acc, t) => acc + parseFloat(t.total_value), 0);
+  const totalROI = totalInvested > 0 ? (((totalCurrent - totalInvested) / totalInvested) * 100).toFixed(2) : 0;
+  const isPositiveOverall = totalCurrent >= totalInvested;
 
   return (
-    <div className="mt-8 animate-slide-up">
-      <h2 className="text-xl font-bold text-gray-200 mb-4 tracking-wider">⚡ THE WAR ROOM (ACTIVE TRADES)</h2>
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6 }} style={{ marginTop: '50px', backgroundColor: '#1e1e1e', padding: '30px', borderRadius: '15px', boxShadow: '0 4px 6px rgba(0,0,0,0.3)', border: '1px solid #333' }}>
       
-      {/* Update this check to use our new filtered list */}
-      {!Array.isArray(activeStockTrades) || activeStockTrades.length === 0 ? (
-        <p className="text-gray-400">No active trades found. Waiting for intel...</p>
-      ) : (
-        activeStockTrades.map(trade => {
-          const liveMarketPrice = trade.live_price || 16500; 
-          const profit = liveMarketPrice - trade.entry_price;
-          const isProfit = profit >= 0;
-          
-          const totalRange = trade.target_sell_price - trade.stop_loss_price;
-          const currentProgress = liveMarketPrice - trade.stop_loss_price;
-          const percentage = Math.min(Math.max((currentProgress / totalRange) * 100, 0), 100);
+      {/* --- HEADER --- */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #333', paddingBottom: '15px', marginBottom: '20px' }}>
+        <div>
+          <h2 style={{ margin: 0, color: '#facc15', textTransform: 'uppercase', fontSize: '1.4rem', letterSpacing: '1px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            ⚡ The War Room
+          </h2>
+          <p style={{ margin: '5px 0 0 0', color: '#888', fontSize: '0.9rem' }}>(Active Trades)</p>
+        </div>
+        <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={() => setIsAdding(!isAdding)} style={{ backgroundColor: '#facc15', color: '#121212', border: 'none', padding: '8px 16px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}>
+          {isAdding ? 'Cancel' : '+ Deploy Capital'}
+        </motion.button>
+      </div>
 
-          return (
-            <div key={trade.id} className="bg-[#1e2330] p-6 rounded-xl border border-gray-700 shadow-lg relative overflow-hidden transition-all hover:-translate-y-1 mb-4">
-              <div className={`absolute left-0 top-0 w-1 h-full ${isProfit ? 'bg-green-400' : 'bg-red-400'}`}></div>
-
-              <div className="flex justify-between items-center mb-6">
-                <div>
-                  <h3 className="text-xl font-bold text-white">{trade.asset_name}</h3>
-                  <span className="bg-gray-700 text-gray-300 text-xs px-2 py-1 rounded mt-1 inline-block">
-                    {trade.asset_symbol} | Qty: {trade.quantity}
-                  </span>
-                </div>
-                <div className="text-right">
-                  <p className={`text-2xl font-bold ${isProfit ? 'text-green-400' : 'text-red-400'}`}>
-                    ₹{liveMarketPrice.toLocaleString()}
-                  </p>
-                  
-                  {/* TIMESTAMP DISPLAY */}
-                  <p className="text-[10px] text-gray-500 uppercase tracking-widest mt-1">
-                    {trade.updated_at ? (
-                      <>
-                        {new Date(trade.updated_at).toLocaleDateString()} | {' '}
-                        {new Date(trade.updated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </>
-                    ) : (
-                      'Live'
-                    )}
-                  </p>
-                </div>
-              </div>
-
-              <div>
-                <div className="flex justify-between text-xs font-bold mb-2">
-                  <span className="text-red-400">SL: ₹{trade.stop_loss_price}</span>
-                  <span className="text-gray-400">ENTRY: ₹{trade.entry_price}</span>
-                  <span className="text-green-400">TP: ₹{trade.target_sell_price}</span>
-                </div>
-                <div className="w-full bg-gray-900 rounded-full h-3 border border-gray-700 relative">
-                  <div
-                    className={`h-full rounded-full transition-all duration-1000 ${isProfit ? 'bg-green-500 shadow-[0_0_10px_#22c55e]' : 'bg-red-500 shadow-[0_0_10px_#ef4444]'}`}
-                    style={{ width: `${percentage}%` }}
-                  ></div>
-                  <div className="absolute top-0 bottom-0 left-[25%] w-0.5 bg-gray-500 z-10"></div>
-                </div>
-              </div>
-            </div>
-          );
-        })
+      {/* --- PORTFOLIO SUMMARY WIDGET --- */}
+      {trades.length > 0 && (
+        <div style={{ display: 'flex', gap: '20px', marginBottom: '25px', backgroundColor: '#121212', padding: '15px', borderRadius: '10px', border: '1px solid #444', flexWrap: 'wrap' }}>
+          <div style={{ flex: 1, minWidth: '100px' }}>
+            <span style={{ color: '#888', fontSize: '0.85rem', textTransform: 'uppercase' }}>Total Invested</span>
+            <h3 style={{ margin: '5px 0 0 0', color: '#fff' }}>₹{totalInvested.toFixed(2)}</h3>
+          </div>
+          <div style={{ flex: 1, borderLeft: '1px solid #333', paddingLeft: '20px', minWidth: '100px' }}>
+            <span style={{ color: '#888', fontSize: '0.85rem', textTransform: 'uppercase' }}>Current Value</span>
+            <h3 style={{ margin: '5px 0 0 0', color: isPositiveOverall ? '#4ade80' : '#f87171' }}>₹{totalCurrent.toFixed(2)}</h3>
+          </div>
+          <div style={{ flex: 1, borderLeft: '1px solid #333', paddingLeft: '20px', minWidth: '100px' }}>
+            <span style={{ color: '#888', fontSize: '0.85rem', textTransform: 'uppercase' }}>Total ROI</span>
+            <h3 style={{ margin: '5px 0 0 0', color: isPositiveOverall ? '#4ade80' : '#f87171' }}>
+              {isPositiveOverall ? '+' : ''}{totalROI}%
+            </h3>
+          </div>
+        </div>
       )}
-    </div>
+
+      {/* --- ADD TRADE FORM --- */}
+      {isAdding && (
+        <motion.form initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} onSubmit={handleAddTrade} style={{ backgroundColor: '#2d2d2d', padding: '20px', borderRadius: '10px', marginBottom: '25px', border: '1px solid #444', display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+          <input required type="text" placeholder="Ticker (e.g., TCS)" value={newTrade.ticker} onChange={(e) => setNewTrade({...newTrade, ticker: e.target.value.toUpperCase()})} style={{ flex: '1 1 150px', padding: '12px', borderRadius: '6px', backgroundColor: '#121212', color: 'white', border: '1px solid #555' }} />
+          <input required type="number" step="0.01" placeholder="Buy Price (₹)" value={newTrade.buy_price} onChange={(e) => setNewTrade({...newTrade, buy_price: e.target.value})} style={{ flex: '1 1 120px', padding: '12px', borderRadius: '6px', backgroundColor: '#121212', color: 'white', border: '1px solid #555' }} />
+          <input required type="number" placeholder="Quantity" value={newTrade.quantity} onChange={(e) => setNewTrade({...newTrade, quantity: e.target.value})} style={{ flex: '1 1 120px', padding: '12px', borderRadius: '6px', backgroundColor: '#121212', color: 'white', border: '1px solid #555' }} />
+          <button type="submit" style={{ padding: '12px', backgroundColor: '#4ade80', color: '#121212', fontWeight: 'bold', border: 'none', borderRadius: '6px', cursor: 'pointer', flex: '1 1 100px' }}>Execute</button>
+        </motion.form>
+      )}
+
+      {/* --- LIVE TRADES GRID --- */}
+      {isLoading ? (
+        <p style={{ color: '#888', textAlign: 'center' }}>Decrypting market data...</p>
+      ) : trades.length > 0 ? (
+        <div style={{ display: 'grid', gap: '15px' }}>
+          {trades.map(trade => {
+            const isPositive = parseFloat(trade.roi) >= 0;
+            return (
+              <div key={trade.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#1a1a1a', padding: '15px 20px', borderRadius: '10px', borderLeft: `4px solid ${isPositive ? '#4ade80' : '#f87171'}`, flexWrap: 'wrap', gap: '10px' }}>
+                <div style={{ flex: 1.5, minWidth: '120px' }}>
+                  <h3 style={{ margin: 0, color: '#fff', fontSize: '1.1rem' }}>{trade.ticker}</h3>
+                  <p style={{ margin: '5px 0 0 0', color: '#888', fontSize: '0.85rem' }}>{trade.quantity} Shares @ ₹{trade.buy_price}</p>
+                </div>
+                <div style={{ flex: 1, textAlign: 'center', minWidth: '80px' }}>
+                  <p style={{ margin: 0, color: '#888', fontSize: '0.75rem', textTransform: 'uppercase' }}>Live Price</p>
+                  <h4 style={{ margin: '5px 0 0 0', color: '#fff', fontSize: '1.1rem' }}>₹{trade.live_price}</h4>
+                </div>
+                <div style={{ flex: 1, textAlign: 'right', minWidth: '80px' }}>
+                  <p style={{ margin: 0, color: '#888', fontSize: '0.75rem', textTransform: 'uppercase' }}>Return</p>
+                  <h4 style={{ margin: '5px 0 0 0', color: isPositive ? '#4ade80' : '#f87171', fontSize: '1.1rem' }}>
+                    {isPositive ? '+' : ''}{trade.roi}%
+                  </h4>
+                </div>
+                <div style={{ marginLeft: '10px' }}>
+                  <motion.button whileHover={{ scale: 1.2 }} whileTap={{ scale: 0.9 }} onClick={() => handleDeleteTrade(trade.id)} style={{ background: 'none', border: 'none', color: '#f87171', cursor: 'pointer', fontSize: '1.2rem', padding: '5px' }} title="Close Position">✖</motion.button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <p style={{ color: '#888', textAlign: 'center', fontStyle: 'italic', padding: '20px' }}>No active trades found. Waiting for intel...</p>
+      )}
+    </motion.div>
   );
-};
+}
 
 export default ActiveTrades;
