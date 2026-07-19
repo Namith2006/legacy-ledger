@@ -142,7 +142,6 @@ router.post('/research', async (req, res) => {
         
         try {
             const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${bestTicker}.NS`;
-            // INJECTING THE BROWSER HEADERS HERE
             const yahooResponse = await fetch(yahooUrl, { headers: YAHOO_HEADERS });
             
             if (!yahooResponse.ok) throw new Error(`Yahoo blocked request: ${yahooResponse.status}`);
@@ -200,7 +199,6 @@ router.post('/discover', async (req, res) => {
     try {
         const { horizon, risk, sector, budget, goal } = req.body;
         
-        // We instruct the AI to provide 4-5 options so we have instant backups if one fails
         const prompt = `
         You are an Indian Stock Market expert. Based on this profile:
         Horizon: ${horizon}, Risk: ${risk}, Sector: ${sector}, Capital: ₹${budget}.
@@ -251,7 +249,6 @@ router.post('/discover', async (req, res) => {
         
         for (let ticker of tickers) {
             try {
-                // Efficiency optimization: If we already successfully processed 3 stocks, stop loop early
                 if (recommendations.length === 3) break;
 
                 let cleanSymbol = ticker.replace('.NS', '').trim().toUpperCase();
@@ -326,9 +323,8 @@ router.post('/discover', async (req, res) => {
             ];
 
             for (let backup of backupPool) {
-                if (recommendations.length >= 3) break; // Stop immediately once we hit 3
+                if (recommendations.length >= 3) break; 
 
-                // Ensure we don't accidentally add a duplicate asset
                 const isDuplicate = recommendations.some(r => r.ticker === backup.ticker);
                 if (!isDuplicate) {
                     const quantity = Math.floor(budget / backup.price) || 1;
@@ -343,7 +339,6 @@ router.post('/discover', async (req, res) => {
             }
         }
 
-        // Final structural slice just to ensure we never send more than 3 back to the frontend UI
         const finalPortfolio = recommendations.slice(0, 3);
 
         res.json({ message: "Discovery Complete", recommendations: finalPortfolio });
@@ -352,3 +347,5 @@ router.post('/discover', async (req, res) => {
         res.status(500).json({ message: "Failed to build your portfolio safely." });
     }
 });
+
+module.exports = router;
