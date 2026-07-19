@@ -85,9 +85,10 @@ app.post('/api/investments', async (req, res) => {
         let cleanSymbol = asset_symbol.toUpperCase().trim();
         if (!cleanSymbol.endsWith('.NS')) cleanSymbol += '.NS'; // Force Indian market
 
+        // FIX: We now insert cleanSymbol into BOTH asset_symbol and asset_name to satisfy the database constraint
         const newTrade = await db.query(
-            "INSERT INTO active_investments (user_id, asset_symbol, entry_price, quantity, status) VALUES ($1, $2, $3, $4, 'HOLDING') RETURNING *",
-            [user_id, cleanSymbol, entry_price, quantity]
+            "INSERT INTO active_investments (user_id, asset_name, asset_symbol, entry_price, quantity, status) VALUES ($1, $2, $3, $4, $5, 'HOLDING') RETURNING *",
+            [user_id, cleanSymbol, cleanSymbol, entry_price, quantity]
         );
         res.status(201).json(newTrade.rows[0]);
     } catch (err) {
