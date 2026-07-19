@@ -87,7 +87,7 @@ router.post('/analyze/:userId', async (req, res) => {
     }
 });
 
-// 2. Route to instantly categorize a raw text transaction
+// 2. Route to instantly categorize a raw text transaction (Upgraded for Asset Trades)
 router.post('/smart-entry', async (req, res) => {
     try {
         const { rawText } = req.body;
@@ -96,12 +96,16 @@ router.post('/smart-entry', async (req, res) => {
         const prompt = `
         Read the following user input and convert it into a strict JSON object.
         User Input: "${rawText}"
+        
         Rules:
-        1. "type": Must be exactly 'income' or 'expense'.
-        2. "amount": Extract number value only.
-        3. "category": Choose from: [food, transport, tech, subscriptions, health, entertainment, freelance, allowance, gift, other].
-        4. "description": Clean, short summary (max 5 words).
-        Return ONLY valid JSON.
+        1. "type": Must be exactly 'income' or 'expense'. 
+           - Selling an asset (like gold or stock) means liquidating to cash, so classify it as 'income'.
+           - Buying an asset takes cash out of the wallet, so classify it as 'expense'.
+        2. "amount": Extract the numeric transaction value only (e.g., if text says "sold gold worth 2200", the amount is 2200).
+        3. "category": Choose the most accurate option from: [food, transport, tech, subscriptions, health, entertainment, freelance, allowance, gift, investments, other].
+        4. "description": Clean summary. Crucial: If the user provides asset trade context (like buy prices or market benchmarks), condense it cleanly here so the history is preserved (e.g., "Sold Gold (Bought @ 14900, Market @ 16000)").
+        
+        Return ONLY valid JSON. Do not include markdown wraps.
         `;
 
         const rawAiText = await generateAIContent(prompt, true);
