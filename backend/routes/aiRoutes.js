@@ -5,12 +5,14 @@ const router = express.Router();
 const db = require('../db');
 const Groq = require('groq-sdk');
 
-// Keep Yahoo Finance initializer present to prevent missing export breakages
-const yfPackage = require('yahoo-finance2');
-const yahooFinance = typeof yfPackage.default === 'function' ? new yfPackage.default() : (yfPackage.default || yfPackage);
-
 // Initialize Groq SDK
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+
+// The "Fake ID" to get past Yahoo's bot blockers
+const YAHOO_HEADERS = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Accept': 'application/json'
+};
 
 // --- SINGLE-CORE ENGINE: GROQ EXCLUSIVE ---
 async function generateAIContent(prompt, isJsonResponse = false) {
@@ -113,7 +115,7 @@ router.post('/smart-entry', async (req, res) => {
     }
 });
 
-// 3. Stoic Market Research Route (Smart Search + Direct Public Market Data)
+// 3. Stoic Market Research Route (Smart Search + Direct Public Market Data WITH FAKE ID)
 router.post('/research', async (req, res) => {
     try {
         let { query, currentBalance } = req.body;
@@ -122,7 +124,7 @@ router.post('/research', async (req, res) => {
         query = query.trim().toUpperCase();
         let cleanSymbol = query.replace('.NS', '');
 
-        // STEP 1: Translate the text into an exact NSE ticker symbol (Twelve Data search is free globally)
+        // STEP 1: Translate the text into an exact NSE ticker symbol
         const searchUrl = `https://api.twelvedata.com/symbol_search?symbol=${encodeURIComponent(cleanSymbol)}&exchange=NSE`;
         const searchResponse = await fetch(searchUrl);
         const searchData = await searchResponse.json();
@@ -131,7 +133,7 @@ router.post('/research', async (req, res) => {
             return res.status(404).json({ message: `Could not find a valid NSE stock for "${query}".` });
         }
 
-        const bestTicker = searchData.data[0].symbol; // e.g., "BEL"
+        const bestTicker = searchData.data[0].symbol;
         let companyName = searchData.data[0].instrument_name || bestTicker;
 
         // STEP 2: The Loophole - Fetch the live price using Yahoo's RAW public chart API
@@ -139,12 +141,14 @@ router.post('/research', async (req, res) => {
         let change = 0;
         
         try {
-            // This direct URL bypasses the blocked yahoo-finance2 package
             const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${bestTicker}.NS`;
-            const yahooResponse = await fetch(yahooUrl);
+            // INJECTING THE BROWSER HEADERS HERE
+            const yahooResponse = await fetch(yahooUrl, { headers: YAHOO_HEADERS });
+            
+            if (!yahooResponse.ok) throw new Error(`Yahoo blocked request: ${yahooResponse.status}`);
+            
             const yahooData = await yahooResponse.json();
 
-            // Extract the real-time data from the raw JSON object
             if (yahooData.chart && yahooData.chart.result && yahooData.chart.result.length > 0) {
                 const meta = yahooData.chart.result[0].meta;
                 price = parseFloat(meta.regularMarketPrice);
@@ -154,7 +158,7 @@ router.post('/research', async (req, res) => {
                 throw new Error("Invalid Yahoo Data");
             }
         } catch (yahooError) {
-            console.log(`⚠️ Raw Market Data missing for ${bestTicker}. Activating fallback.`);
+            console.log(`⚠️ Raw Market Data missing for ${bestTicker}: ${yahooError.message}. Activating fallback.`);
             price = parseFloat((Math.random() * 500 + 100).toFixed(2));
             change = parseFloat((Math.random() * 4 - 2).toFixed(2));
             companyName = `${companyName} (Estimated)`;
@@ -191,7 +195,7 @@ router.post('/research', async (req, res) => {
     }
 });
 
-// 4. Robo-Advisor Guided Discovery Route (Fully Safe Object Parsing & Yahoo Loophole)
+// 4. Robo-Advisor Guided Discovery Route (Fully Safe Object Parsing & Yahoo Loophole WITH FAKE ID)
 router.post('/discover', async (req, res) => {
     try {
         const { horizon, risk, sector, budget, goal } = req.body;
@@ -212,7 +216,6 @@ router.post('/discover', async (req, res) => {
 
         const rawAiText = await generateAIContent(prompt, true);
         
-        // --- RESILIENT JSON EXTRACTION SAFETY NET ---
         let tickers = [];
         try {
             const cleanJson = rawAiText.replace(/```json/gi, '').replace(/```/gi, '').trim();
@@ -232,26 +235,21 @@ router.post('/discover', async (req, res) => {
                 }
             }
         } catch (parseError) {
-            console.error("JSON parsing caught an exception. Deploying regex recovery:", parseError.message);
             const matches = rawAiText.match(/"([^"]+)"/g);
             if (matches) {
                 tickers = matches.map(m => m.replace(/"/g, ''));
             }
         }
 
-        // Ultimate hardcoded safety net fallback to guarantee response delivery
         if (!Array.isArray(tickers) || tickers.length === 0) {
             tickers = ["TCS", "INFY", "RELIANCE"];
         }
-        // --------------------------------------------
 
         const recommendations = [];
         
         for (let ticker of tickers) {
             try {
                 let cleanSymbol = ticker.replace('.NS', '').trim().toUpperCase();
-                
-                // Skip placeholder elements returned by regex edge cases
                 if (cleanSymbol === "TICKERS" || cleanSymbol.length > 7) continue;
 
                 let price = 0;
@@ -260,7 +258,11 @@ router.post('/discover', async (req, res) => {
                 // --- THE YAHOO LOOPHOLE ---
                 try {
                     const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${cleanSymbol}.NS`;
-                    const yahooResponse = await fetch(yahooUrl);
+                    // INJECTING THE BROWSER HEADERS HERE
+                    const yahooResponse = await fetch(yahooUrl, { headers: YAHOO_HEADERS });
+                    
+                    if (!yahooResponse.ok) throw new Error(`Yahoo blocked request: ${yahooResponse.status}`);
+                    
                     const yahooData = await yahooResponse.json();
 
                     if (yahooData.chart && yahooData.chart.result && yahooData.chart.result.length > 0) {
@@ -271,13 +273,12 @@ router.post('/discover', async (req, res) => {
                         throw new Error("Invalid Yahoo Data");
                     }
                 } catch (yahooError) {
-                    console.log(`⚠️ Live data missing for discovery asset: ${cleanSymbol}. Deploying simulation framework.`);
+                    console.log(`⚠️ Live data missing for discovery asset: ${cleanSymbol}: ${yahooError.message}. Deploying simulation.`);
                     price = parseFloat((Math.random() * 800 + 80).toFixed(2));
                     companyName = `${cleanSymbol} (Estimated)`;
                 }
-                // --------------------------
 
-                const quantity = Math.floor(budget / price) || 1; // Ensures at least 1 share if budget is tight
+                const quantity = Math.floor(budget / price) || 1; 
                 
                 recommendations.push({
                     ticker: cleanSymbol + '.NS',
@@ -295,7 +296,6 @@ router.post('/discover', async (req, res) => {
             }
         }
 
-        // Final fail-safe checkpoint to prevent a 500 status response code
         if (recommendations.length === 0) {
             recommendations.push(
                 { ticker: "TCS.NS", company: "Tata Consultancy Services", price: 3950.00, quantity: Math.floor(budget / 3950) || 1, reason: "Stable core backing for wealth growth." },
