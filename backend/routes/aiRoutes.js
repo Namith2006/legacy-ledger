@@ -195,23 +195,24 @@ router.post('/research', async (req, res) => {
     }
 });
 
-// 4. Robo-Advisor Guided Discovery Route (With Yahoo Autocorrect Engine)
+// 4. Robo-Advisor Guided Discovery Route (Guaranteed 3-Asset Delivery & Over-Provisioning)
 router.post('/discover', async (req, res) => {
     try {
         const { horizon, risk, sector, budget, goal } = req.body;
         
+        // We instruct the AI to provide 4-5 options so we have instant backups if one fails
         const prompt = `
         You are an Indian Stock Market expert. Based on this profile:
         Horizon: ${horizon}, Risk: ${risk}, Sector: ${sector}, Capital: ₹${budget}.
         Primary Goal: ${goal}.
 
-        Suggest exactly 3 Indian stock tickers that are actively traded on the NSE.
-        Use actual, official NSE tickers (e.g., HDFCBANK, TCS, INFY). Do not invent tickers.
-        You must return a valid JSON object containing a root key named "tickers" holding an array of 3 ticker string elements (no ".NS" suffix, upper case).
+        Suggest 4 to 5 high-quality Indian stock tickers that are actively traded on the NSE.
+        Use actual, official NSE tickers (e.g., HDFCBANK, TCS, INFY, SBIN). Do not invent tickers.
+        You must return a valid JSON object containing a root key named "tickers" holding an array of ticker string elements (no ".NS" suffix, upper case).
         
         Example JSON format:
         {
-          "tickers": ["TCS", "INFY", "RELIANCE"]
+          "tickers": ["TCS", "INFY", "RELIANCE", "SBIN"]
         }
         `;
 
@@ -250,6 +251,9 @@ router.post('/discover', async (req, res) => {
         
         for (let ticker of tickers) {
             try {
+                // Efficiency optimization: If we already successfully processed 3 stocks, stop loop early
+                if (recommendations.length === 3) break;
+
                 let cleanSymbol = ticker.replace('.NS', '').trim().toUpperCase();
                 if (cleanSymbol === "TICKERS" || cleanSymbol.length > 7) continue;
 
@@ -258,19 +262,17 @@ router.post('/discover', async (req, res) => {
                 let finalTicker = cleanSymbol + ".NS";
 
                 // --- STEP 1: YAHOO AUTOCORRECT TRANSLATOR ---
-                // This catches AI hallucinations (like HDFCCB) and finds the real ticker
                 try {
                     const searchUrl = `https://query2.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(cleanSymbol)}&quotesCount=1&newsCount=0`;
                     const searchResponse = await fetch(searchUrl, { headers: YAHOO_HEADERS });
                     const searchData = await searchResponse.json();
                     
                     if (searchData.quotes && searchData.quotes.length > 0) {
-                        // Grab the official corrected ticker from Yahoo's directory
                         finalTicker = searchData.quotes[0].symbol; 
                         companyName = searchData.quotes[0].shortname || searchData.quotes[0].longname || cleanSymbol;
                     }
                 } catch (searchErr) {
-                    console.log(`Translator failed for ${cleanSymbol}, continuing with raw ticker.`);
+                    console.log(`Translator missed for ${cleanSymbol}`);
                 }
 
                 // --- STEP 2: THE YAHOO LIVE PRICE LOOPHOLE ---
@@ -278,7 +280,7 @@ router.post('/discover', async (req, res) => {
                     const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${finalTicker}`;
                     const yahooResponse = await fetch(yahooUrl, { headers: YAHOO_HEADERS });
                     
-                    if (!yahooResponse.ok) throw new Error(`Yahoo blocked request: ${yahooResponse.status}`);
+                    if (!yahooResponse.ok) throw new Error(`Yahoo blocked request`);
                     
                     const yahooData = await yahooResponse.json();
 
@@ -290,7 +292,7 @@ router.post('/discover', async (req, res) => {
                         throw new Error("Invalid Yahoo Data");
                     }
                 } catch (yahooError) {
-                    console.log(`⚠️ Live data missing for discovery asset: ${finalTicker}: ${yahooError.message}. Deploying simulation.`);
+                    console.log(`⚠️ Live data missing for discovery asset: ${finalTicker}. Deploying simulation.`);
                     price = parseFloat((Math.random() * 800 + 80).toFixed(2));
                     companyName = `${companyName} (Estimated)`;
                 }
@@ -305,7 +307,6 @@ router.post('/discover', async (req, res) => {
                     reason: `Fits a ${risk} profile for your goal: ${goal}.` 
                 });
                 
-                // 500ms delay to pace requests
                 await new Promise(resolve => setTimeout(resolve, 500));
                 
             } catch (e) {
@@ -313,19 +314,41 @@ router.post('/discover', async (req, res) => {
             }
         }
 
-        if (recommendations.length === 0) {
-            recommendations.push(
-                { ticker: "TCS.NS", company: "Tata Consultancy Services", price: 3950.00, quantity: Math.floor(budget / 3950) || 1, reason: "Stable core backing for wealth growth." },
-                { ticker: "INFY.NS", company: "Infosys Limited", price: 1620.00, quantity: Math.floor(budget / 1620) || 1, reason: "Strong tech foundations alignment." },
-                { ticker: "RELIANCE.NS", company: "Reliance Industries", price: 2450.00, quantity: Math.floor(budget / 2450) || 1, reason: "Broad index coverage protection." }
-            );
+        // --- STEP 3: DYNAMIC BACKFILLING POOL (GUARANTEES MINIMUM 3 STOCKS) ---
+        if (recommendations.length < 3) {
+            console.log(`⚠️ Portfolio short on requirements (${recommendations.length}/3). Initiating blue-chip backfill.`);
+            
+            const backupPool = [
+                { ticker: "TCS.NS", company: "Tata Consultancy Services", price: 3950.00, reason: "Stable tech foundations alignment." },
+                { ticker: "RELIANCE.NS", company: "Reliance Industries Limited", price: 2450.00, reason: "Broad index energy coverage protection." },
+                { ticker: "HDFCBANK.NS", company: "HDFC Bank Limited", price: 1650.00, reason: "Core banking sector heavyweight security." },
+                { ticker: "INFY.NS", company: "Infosys Limited", price: 1620.00, reason: "Stable core backing for wealth growth." }
+            ];
+
+            for (let backup of backupPool) {
+                if (recommendations.length >= 3) break; // Stop immediately once we hit 3
+
+                // Ensure we don't accidentally add a duplicate asset
+                const isDuplicate = recommendations.some(r => r.ticker === backup.ticker);
+                if (!isDuplicate) {
+                    const quantity = Math.floor(budget / backup.price) || 1;
+                    recommendations.push({
+                        ticker: backup.ticker,
+                        company: backup.company,
+                        price: backup.price,
+                        quantity: quantity,
+                        reason: `${backup.reason} (Fallback Allocation for ${goal})`
+                    });
+                }
+            }
         }
 
-        res.json({ message: "Discovery Complete", recommendations });
+        // Final structural slice just to ensure we never send more than 3 back to the frontend UI
+        const finalPortfolio = recommendations.slice(0, 3);
+
+        res.json({ message: "Discovery Complete", recommendations: finalPortfolio });
     } catch (err) {
         console.error("Discovery Error:", err.message);
         res.status(500).json({ message: "Failed to build your portfolio safely." });
     }
 });
-
-module.exports = router;
