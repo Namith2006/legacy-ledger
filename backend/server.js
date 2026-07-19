@@ -77,7 +77,36 @@ app.get('/api/investments', async (req, res) => {
         res.status(500).json({ error: "Server Error" });
     }
 });
+// --- DEPLOY CAPITAL: SAVE NEW TRADE ---
+app.post('/api/investments', async (req, res) => {
+    try {
+        const { user_id, asset_symbol, entry_price, quantity } = req.body;
+        
+        let cleanSymbol = asset_symbol.toUpperCase().trim();
+        if (!cleanSymbol.endsWith('.NS')) cleanSymbol += '.NS'; // Force Indian market
 
+        const newTrade = await db.query(
+            "INSERT INTO active_investments (user_id, asset_symbol, entry_price, quantity, status) VALUES ($1, $2, $3, $4, 'HOLDING') RETURNING *",
+            [user_id, cleanSymbol, entry_price, quantity]
+        );
+        res.status(201).json(newTrade.rows[0]);
+    } catch (err) {
+        console.error("Add Trade Error:", err.message);
+        res.status(500).json({ message: "Server Error" });
+    }
+});
+
+// --- CLOSE POSITION: DELETE TRADE ---
+app.delete('/api/investments/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        await db.query("DELETE FROM active_investments WHERE id = $1", [id]);
+        res.json({ message: "Position Closed" });
+    } catch (err) {
+        console.error("Delete Trade Error:", err.message);
+        res.status(500).json({ message: "Server Error" });
+    }
+});
 // --- KEEP-AWAKE PING ROUTE FOR UPTIMEROBOT ---
 app.get('/api/ping', (req, res) => {
     res.status(200).send("Legacy Ledger Backend is awake!");

@@ -9,7 +9,7 @@ const ActiveTrades = () => {
 
   const fetchTrades = async () => {
     try {
-      const res = await fetch('https://legacy-ledger.onrender.com/api/trades/1');
+      const res = await fetch('https://legacy-ledger.onrender.com/api/investments');
       if (res.ok) {
         const data = await res.json();
         setTrades(data);
@@ -21,7 +21,6 @@ const ActiveTrades = () => {
     }
   };
 
-  // Fetch immediately, then refresh market data every 60 seconds
   useEffect(() => {
     fetchTrades();
     const interval = setInterval(fetchTrades, 60000);
@@ -31,13 +30,13 @@ const ActiveTrades = () => {
   const handleAddTrade = async (e) => {
     e.preventDefault();
     try {
-      const res = await fetch('https://legacy-ledger.onrender.com/api/trades', {
+      const res = await fetch('https://legacy-ledger.onrender.com/api/investments', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           user_id: 1,
-          ticker: newTrade.ticker,
-          buy_price: parseFloat(newTrade.buy_price),
+          asset_symbol: newTrade.ticker,
+          entry_price: parseFloat(newTrade.buy_price),
           quantity: parseInt(newTrade.quantity, 10)
         })
       });
@@ -45,16 +44,18 @@ const ActiveTrades = () => {
         setNewTrade({ ticker: '', buy_price: '', quantity: '' });
         setIsAdding(false);
         fetchTrades(); 
+      } else {
+        alert("Server failed to save the trade.");
       }
     } catch (error) {
-      alert("Failed to deploy capital.");
+      alert("Lost connection to server.");
     }
   };
 
   const handleDeleteTrade = async (id) => {
     if (!window.confirm("Close this position?")) return;
     try {
-      const res = await fetch(`https://legacy-ledger.onrender.com/api/trades/${id}`, {
+      const res = await fetch(`https://legacy-ledger.onrender.com/api/investments/${id}`, {
         method: 'DELETE'
       });
       if (res.ok) {
@@ -66,8 +67,8 @@ const ActiveTrades = () => {
   };
 
   // Master Portfolio Math
-  const totalInvested = trades.reduce((acc, t) => acc + (t.buy_price * t.quantity), 0);
-  const totalCurrent = trades.reduce((acc, t) => acc + parseFloat(t.total_value), 0);
+  const totalInvested = trades.reduce((acc, t) => acc + (parseFloat(t.entry_price) * parseInt(t.quantity || 1)), 0);
+  const totalCurrent = trades.reduce((acc, t) => acc + (parseFloat(t.live_price) * parseInt(t.quantity || 1)), 0);
   const totalROI = totalInvested > 0 ? (((totalCurrent - totalInvested) / totalInvested) * 100).toFixed(2) : 0;
   const isPositiveOverall = totalCurrent >= totalInvested;
 
@@ -92,11 +93,11 @@ const ActiveTrades = () => {
         <div style={{ display: 'flex', gap: '20px', marginBottom: '25px', backgroundColor: '#121212', padding: '15px', borderRadius: '10px', border: '1px solid #444', flexWrap: 'wrap' }}>
           <div style={{ flex: 1, minWidth: '100px' }}>
             <span style={{ color: '#888', fontSize: '0.85rem', textTransform: 'uppercase' }}>Total Invested</span>
-            <h3 style={{ margin: '5px 0 0 0', color: '#fff' }}>₹{totalInvested.toFixed(2)}</h3>
+            <h3 style={{ margin: '5px 0 0 0', color: '#fff' }}>₹{totalInvested.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</h3>
           </div>
           <div style={{ flex: 1, borderLeft: '1px solid #333', paddingLeft: '20px', minWidth: '100px' }}>
             <span style={{ color: '#888', fontSize: '0.85rem', textTransform: 'uppercase' }}>Current Value</span>
-            <h3 style={{ margin: '5px 0 0 0', color: isPositiveOverall ? '#4ade80' : '#f87171' }}>₹{totalCurrent.toFixed(2)}</h3>
+            <h3 style={{ margin: '5px 0 0 0', color: isPositiveOverall ? '#4ade80' : '#f87171' }}>₹{totalCurrent.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</h3>
           </div>
           <div style={{ flex: 1, borderLeft: '1px solid #333', paddingLeft: '20px', minWidth: '100px' }}>
             <span style={{ color: '#888', fontSize: '0.85rem', textTransform: 'uppercase' }}>Total ROI</span>
@@ -123,21 +124,26 @@ const ActiveTrades = () => {
       ) : trades.length > 0 ? (
         <div style={{ display: 'grid', gap: '15px' }}>
           {trades.map(trade => {
-            const isPositive = parseFloat(trade.roi) >= 0;
+            const entry = parseFloat(trade.entry_price);
+            const live = parseFloat(trade.live_price);
+            const qty = parseInt(trade.quantity || 1);
+            const roi = (((live - entry) / entry) * 100).toFixed(2);
+            const isPositive = roi >= 0;
+
             return (
               <div key={trade.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#1a1a1a', padding: '15px 20px', borderRadius: '10px', borderLeft: `4px solid ${isPositive ? '#4ade80' : '#f87171'}`, flexWrap: 'wrap', gap: '10px' }}>
                 <div style={{ flex: 1.5, minWidth: '120px' }}>
-                  <h3 style={{ margin: 0, color: '#fff', fontSize: '1.1rem' }}>{trade.ticker}</h3>
-                  <p style={{ margin: '5px 0 0 0', color: '#888', fontSize: '0.85rem' }}>{trade.quantity} Shares @ ₹{trade.buy_price}</p>
+                  <h3 style={{ margin: 0, color: '#fff', fontSize: '1.1rem' }}>{trade.asset_symbol}</h3>
+                  <p style={{ margin: '5px 0 0 0', color: '#888', fontSize: '0.85rem' }}>{qty} Shares @ ₹{entry.toLocaleString('en-IN')}</p>
                 </div>
                 <div style={{ flex: 1, textAlign: 'center', minWidth: '80px' }}>
                   <p style={{ margin: 0, color: '#888', fontSize: '0.75rem', textTransform: 'uppercase' }}>Live Price</p>
-                  <h4 style={{ margin: '5px 0 0 0', color: '#fff', fontSize: '1.1rem' }}>₹{trade.live_price}</h4>
+                  <h4 style={{ margin: '5px 0 0 0', color: '#fff', fontSize: '1.1rem' }}>₹{live.toLocaleString('en-IN', {minimumFractionDigits: 2})}</h4>
                 </div>
                 <div style={{ flex: 1, textAlign: 'right', minWidth: '80px' }}>
                   <p style={{ margin: 0, color: '#888', fontSize: '0.75rem', textTransform: 'uppercase' }}>Return</p>
                   <h4 style={{ margin: '5px 0 0 0', color: isPositive ? '#4ade80' : '#f87171', fontSize: '1.1rem' }}>
-                    {isPositive ? '+' : ''}{trade.roi}%
+                    {isPositive ? '+' : ''}{roi}%
                   </h4>
                 </div>
                 <div style={{ marginLeft: '10px' }}>
