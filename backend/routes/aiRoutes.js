@@ -113,7 +113,7 @@ router.post('/smart-entry', async (req, res) => {
     }
 });
 
-// 3. Stoic Market Research Route (Using Twelve Data API with Smart Search & Graceful Fallback)
+// 3. Stoic Market Research Route (Smart Search + Direct Public Market Data)
 router.post('/research', async (req, res) => {
     try {
         let { query, currentBalance } = req.body;
@@ -122,6 +122,7 @@ router.post('/research', async (req, res) => {
         query = query.trim().toUpperCase();
         let cleanSymbol = query.replace('.NS', '');
 
+        // STEP 1: Translate the text into an exact NSE ticker symbol (Twelve Data search is free globally)
         const searchUrl = `https://api.twelvedata.com/symbol_search?symbol=${encodeURIComponent(cleanSymbol)}&exchange=NSE`;
         const searchResponse = await fetch(searchUrl);
         const searchData = await searchResponse.json();
@@ -130,33 +131,42 @@ router.post('/research', async (req, res) => {
             return res.status(404).json({ message: `Could not find a valid NSE stock for "${query}".` });
         }
 
-        const bestTicker = searchData.data[0].symbol;
+        const bestTicker = searchData.data[0].symbol; // e.g., "BEL"
+        let companyName = searchData.data[0].instrument_name || bestTicker;
 
-        const url = `https://api.twelvedata.com/quote?symbol=${bestTicker}&exchange=NSE&apikey=${process.env.TWELVEDATA_API_KEY}`;
-        const tdResponse = await fetch(url);
-        let data = await tdResponse.json();
+        // STEP 2: The Loophole - Fetch the live price using Yahoo's RAW public chart API
+        let price = 0;
+        let change = 0;
+        
+        try {
+            // This direct URL bypasses the blocked yahoo-finance2 package
+            const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${bestTicker}.NS`;
+            const yahooResponse = await fetch(yahooUrl);
+            const yahooData = await yahooResponse.json();
 
-        if (data.status === 'error' || !data.close) {
-            console.log(`⚠️ Live data missing for ${bestTicker}. Activating fallback engine.`);
-            data = {
-                close: (Math.random() * 500 + 100).toFixed(2), 
-                percent_change: (Math.random() * 4 - 2).toFixed(2), 
-                name: `${bestTicker} (Estimated)`,
-                symbol: bestTicker
-            };
+            // Extract the real-time data from the raw JSON object
+            if (yahooData.chart && yahooData.chart.result && yahooData.chart.result.length > 0) {
+                const meta = yahooData.chart.result[0].meta;
+                price = parseFloat(meta.regularMarketPrice);
+                const prevClose = parseFloat(meta.chartPreviousClose);
+                change = ((price - prevClose) / prevClose) * 100;
+            } else {
+                throw new Error("Invalid Yahoo Data");
+            }
+        } catch (yahooError) {
+            console.log(`⚠️ Raw Market Data missing for ${bestTicker}. Activating fallback.`);
+            price = parseFloat((Math.random() * 500 + 100).toFixed(2));
+            change = parseFloat((Math.random() * 4 - 2).toFixed(2));
+            companyName = `${companyName} (Estimated)`;
         }
-        
-        const price = parseFloat(data.close);
-        const change = parseFloat(data.percent_change);
-        const companyName = data.name;
-        
-        const lastUpdated = new Date(); 
+
+        const lastUpdated = new Date();
 
         const prompt = `
         You are a stoic financial advisor assisting a BCA student named Namith. 
         Analyze the following asset:
         Company: ${companyName} (${bestTicker})
-        Live Price: ₹${price}
+        Live Price: ₹${price.toFixed(2)}
         Today's Change: ${change.toFixed(2)}%
 
         Provide a strictly objective, stoic analysis. Format in 3 short paragraphs.
