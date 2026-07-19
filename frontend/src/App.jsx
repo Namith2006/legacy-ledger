@@ -336,9 +336,9 @@ function App() {
                 }} />
               ))}
               <StepButton label="General Wealth Building" onClick={() => {
-                  const updatedAnswers = { ...discoveryAnswers, goal: 'General Wealth Building' };
-                  setDiscoveryAnswers(updatedAnswers); 
-                  submitDiscovery(null, updatedAnswers);
+                const updatedAnswers = { ...discoveryAnswers, goal: 'General Wealth Building' };
+                setDiscoveryAnswers(updatedAnswers); 
+                submitDiscovery(null, updatedAnswers);
               }} />
             </div>
           </motion.div>
@@ -473,12 +473,25 @@ function App() {
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           {goals.length > 0 ? (
-            goals.map((goal, index) => {
-              const progressPercentage = Math.min((goal.current_amount / goal.target_amount) * 100, 100).toFixed(1);
+            goals.map((goal) => {
+              // Safety checks and math for amounts
+              const current = parseFloat(goal.current_amount) || 0;
+              const target = parseFloat(goal.target_amount) || 0;
+              
+              // Prevent division by zero errors
+              const progressPercentage = target > 0 ? Math.min((current / target) * 100, 100).toFixed(1) : 0;
+              
               return (
                 <div key={goal.id} style={{ backgroundColor: '#1e1e1e', padding: '20px', borderRadius: '10px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                    <h3 style={{ margin: '0', fontSize: '1.2rem', color: '#fff' }}>{goal.title}</h3>
+                    
+                    {/* --- ADDED SUBTITLE WITH AMOUNTS --- */}
+                    <div>
+                      <h3 style={{ margin: '0', fontSize: '1.2rem', color: '#fff' }}>{goal.title}</h3>
+                      <p style={{ margin: '5px 0 0 0', color: '#888', fontSize: '0.9rem', fontWeight: '500' }}>
+                        ₹{current.toLocaleString('en-IN')} <span style={{ color: '#555' }}>/</span> ₹{target.toLocaleString('en-IN')}
+                      </p>
+                    </div>
                     
                     {/* The Interactive Actions Cluster */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
