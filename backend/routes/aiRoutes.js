@@ -87,25 +87,32 @@ router.post('/analyze/:userId', async (req, res) => {
     }
 });
 
-// 2. Route to instantly categorize a raw text transaction (Upgraded for Asset Trades)
+/// 2. Route to instantly categorize a transaction (Upgraded with Auto-Profit Calculation Engine)
 router.post('/smart-entry', async (req, res) => {
     try {
         const { rawText } = req.body;
         if (!rawText) return res.status(400).json({ message: "Please provide transaction text." });
 
         const prompt = `
-        Read the following user input and convert it into a strict JSON object.
+        Read the following user input and convert it into a strict, clean JSON object.
         User Input: "${rawText}"
         
         Rules:
         1. "type": Must be exactly 'income' or 'expense'. 
-           - Selling an asset (like gold or stock) means liquidating to cash, so classify it as 'income'.
-           - Buying an asset takes cash out of the wallet, so classify it as 'expense'.
-        2. "amount": Extract the numeric transaction value only (e.g., if text says "sold gold worth 2200", the amount is 2200).
-        3. "category": Choose the most accurate option from: [food, transport, tech, subscriptions, health, entertainment, freelance, allowance, gift, investments, other].
-        4. "description": Clean summary. Crucial: If the user provides asset trade context (like buy prices or market benchmarks), condense it cleanly here so the history is preserved (e.g., "Sold Gold (Bought @ 14900, Market @ 16000)").
+           - Selling an asset (gold, stock, crypto) brings cash in -> 'income'.
+           - Buying an asset takes cash out -> 'expense'.
+        2. "amount": Extract the actual total cash transaction value only (e.g., "sold gold worth 2200" -> 2200).
+        3. "category": Choose from: [food, transport, tech, subscriptions, health, entertainment, freelance, allowance, gift, investments, other].
+        4. "description": Clean summary. 
+           CRUCIAL FINANCIAL MATH RULE: If the user provides asset trade context involving an original buy rate and a sell rate, you must calculate the absolute profit or loss:
+           - Example math for "sold gold worth 2200 bought at 14900 when gold is 16000":
+             Fractional units sold = 2200 / 16000 = 0.1375 units.
+             Original cost basis = 0.1375 * 14900 = 2048.75.
+             Net Profit = 2200 - 2048.75 = 151.25.
+           - Append this calculated profit clearly into the description string!
+           - Example output format: "Sold Gold (Profit: +₹151.25 | Buy: 14.9k, Sell: 16k)"
         
-        Return ONLY valid JSON. Do not include markdown wraps.
+        Return ONLY valid JSON matching this structure. Do not include markdown ticks.
         `;
 
         const rawAiText = await generateAIContent(prompt, true);
