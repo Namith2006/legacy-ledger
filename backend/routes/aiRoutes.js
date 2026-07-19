@@ -195,7 +195,7 @@ router.post('/research', async (req, res) => {
     }
 });
 
-// 4. Robo-Advisor Guided Discovery Route (Fully Safe Object Parsing & Yahoo Loophole WITH FAKE ID)
+// 4. Robo-Advisor Guided Discovery Route (With Yahoo Autocorrect Engine)
 router.post('/discover', async (req, res) => {
     try {
         const { horizon, risk, sector, budget, goal } = req.body;
@@ -206,6 +206,7 @@ router.post('/discover', async (req, res) => {
         Primary Goal: ${goal}.
 
         Suggest exactly 3 Indian stock tickers that are actively traded on the NSE.
+        Use actual, official NSE tickers (e.g., HDFCBANK, TCS, INFY). Do not invent tickers.
         You must return a valid JSON object containing a root key named "tickers" holding an array of 3 ticker string elements (no ".NS" suffix, upper case).
         
         Example JSON format:
@@ -254,11 +255,27 @@ router.post('/discover', async (req, res) => {
 
                 let price = 0;
                 let companyName = cleanSymbol;
+                let finalTicker = cleanSymbol + ".NS";
 
-                // --- THE YAHOO LOOPHOLE ---
+                // --- STEP 1: YAHOO AUTOCORRECT TRANSLATOR ---
+                // This catches AI hallucinations (like HDFCCB) and finds the real ticker
                 try {
-                    const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${cleanSymbol}.NS`;
-                    // INJECTING THE BROWSER HEADERS HERE
+                    const searchUrl = `https://query2.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(cleanSymbol)}&quotesCount=1&newsCount=0`;
+                    const searchResponse = await fetch(searchUrl, { headers: YAHOO_HEADERS });
+                    const searchData = await searchResponse.json();
+                    
+                    if (searchData.quotes && searchData.quotes.length > 0) {
+                        // Grab the official corrected ticker from Yahoo's directory
+                        finalTicker = searchData.quotes[0].symbol; 
+                        companyName = searchData.quotes[0].shortname || searchData.quotes[0].longname || cleanSymbol;
+                    }
+                } catch (searchErr) {
+                    console.log(`Translator failed for ${cleanSymbol}, continuing with raw ticker.`);
+                }
+
+                // --- STEP 2: THE YAHOO LIVE PRICE LOOPHOLE ---
+                try {
+                    const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${finalTicker}`;
                     const yahooResponse = await fetch(yahooUrl, { headers: YAHOO_HEADERS });
                     
                     if (!yahooResponse.ok) throw new Error(`Yahoo blocked request: ${yahooResponse.status}`);
@@ -268,20 +285,20 @@ router.post('/discover', async (req, res) => {
                     if (yahooData.chart && yahooData.chart.result && yahooData.chart.result.length > 0) {
                         const meta = yahooData.chart.result[0].meta;
                         price = parseFloat(meta.regularMarketPrice);
-                        companyName = meta.shortName || cleanSymbol;
+                        companyName = meta.shortName || companyName;
                     } else {
                         throw new Error("Invalid Yahoo Data");
                     }
                 } catch (yahooError) {
-                    console.log(`⚠️ Live data missing for discovery asset: ${cleanSymbol}: ${yahooError.message}. Deploying simulation.`);
+                    console.log(`⚠️ Live data missing for discovery asset: ${finalTicker}: ${yahooError.message}. Deploying simulation.`);
                     price = parseFloat((Math.random() * 800 + 80).toFixed(2));
-                    companyName = `${cleanSymbol} (Estimated)`;
+                    companyName = `${companyName} (Estimated)`;
                 }
 
                 const quantity = Math.floor(budget / price) || 1; 
                 
                 recommendations.push({
-                    ticker: cleanSymbol + '.NS',
+                    ticker: finalTicker,
                     company: companyName,
                     price: price,
                     quantity: quantity,
