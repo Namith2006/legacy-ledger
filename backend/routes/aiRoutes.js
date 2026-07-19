@@ -191,7 +191,7 @@ router.post('/research', async (req, res) => {
     }
 });
 
-// 4. Robo-Advisor Guided Discovery Route (Fully Safe Object Parsing & Resilient Loop)
+// 4. Robo-Advisor Guided Discovery Route (Fully Safe Object Parsing & Yahoo Loophole)
 router.post('/discover', async (req, res) => {
     try {
         const { horizon, risk, sector, budget, goal } = req.body;
@@ -246,7 +246,6 @@ router.post('/discover', async (req, res) => {
         // --------------------------------------------
 
         const recommendations = [];
-        const apiKey = process.env.TWELVEDATA_DISCOVERY_KEY || process.env.TWELVEDATA_API_KEY;
         
         for (let ticker of tickers) {
             try {
@@ -255,30 +254,41 @@ router.post('/discover', async (req, res) => {
                 // Skip placeholder elements returned by regex edge cases
                 if (cleanSymbol === "TICKERS" || cleanSymbol.length > 7) continue;
 
-                const quoteUrl = `https://api.twelvedata.com/quote?symbol=${cleanSymbol}&exchange=NSE&apikey=${apiKey}`;
-                const quoteResponse = await fetch(quoteUrl);
-                let quote = await quoteResponse.json();
-                
-                if (quote.status === 'error' || !quote.close) {
-                    console.log(`⚠️ Live data missing for discovery asset: ${cleanSymbol}. Deploying simulation framework.`);
-                    quote = {
-                        close: (Math.random() * 800 + 80).toFixed(2), 
-                        name: `${cleanSymbol} (Estimated)`
-                    };
-                }
+                let price = 0;
+                let companyName = cleanSymbol;
 
-                const price = parseFloat(quote.close);
-                const quantity = Math.floor(budget / price);
+                // --- THE YAHOO LOOPHOLE ---
+                try {
+                    const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${cleanSymbol}.NS`;
+                    const yahooResponse = await fetch(yahooUrl);
+                    const yahooData = await yahooResponse.json();
+
+                    if (yahooData.chart && yahooData.chart.result && yahooData.chart.result.length > 0) {
+                        const meta = yahooData.chart.result[0].meta;
+                        price = parseFloat(meta.regularMarketPrice);
+                        companyName = meta.shortName || cleanSymbol;
+                    } else {
+                        throw new Error("Invalid Yahoo Data");
+                    }
+                } catch (yahooError) {
+                    console.log(`⚠️ Live data missing for discovery asset: ${cleanSymbol}. Deploying simulation framework.`);
+                    price = parseFloat((Math.random() * 800 + 80).toFixed(2));
+                    companyName = `${cleanSymbol} (Estimated)`;
+                }
+                // --------------------------
+
+                const quantity = Math.floor(budget / price) || 1; // Ensures at least 1 share if budget is tight
                 
                 recommendations.push({
                     ticker: cleanSymbol + '.NS',
-                    company: quote.name || cleanSymbol,
+                    company: companyName,
                     price: price,
                     quantity: quantity,
                     reason: `Fits a ${risk} profile for your goal: ${goal}.` 
                 });
                 
-                await new Promise(resolve => setTimeout(resolve, 800));
+                // 500ms delay to pace requests
+                await new Promise(resolve => setTimeout(resolve, 500));
                 
             } catch (e) {
                 console.log(`Error processing discovery component ${ticker}:`, e.message);
@@ -297,7 +307,7 @@ router.post('/discover', async (req, res) => {
         res.json({ message: "Discovery Complete", recommendations });
     } catch (err) {
         console.error("Discovery Error:", err.message);
-        res.status(500).json({ message: "Failed to build your portfolio portfolio safely." });
+        res.status(500).json({ message: "Failed to build your portfolio safely." });
     }
 });
 
