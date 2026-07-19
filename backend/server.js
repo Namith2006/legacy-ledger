@@ -85,10 +85,10 @@ app.post('/api/investments', async (req, res) => {
         let cleanSymbol = asset_symbol.toUpperCase().trim();
         if (!cleanSymbol.endsWith('.NS')) cleanSymbol += '.NS'; // Force Indian market
 
-        // FIX: Added target_sell_price to the SQL query and assigned it a default value of 0 ($6)
+        // FIX: Added stop_loss_price to the SQL query and assigned it a default value of 0 ($7)
         const newTrade = await db.query(
-            "INSERT INTO active_investments (user_id, asset_name, asset_symbol, entry_price, quantity, target_sell_price, status) VALUES ($1, $2, $3, $4, $5, $6, 'HOLDING') RETURNING *",
-            [user_id, cleanSymbol, cleanSymbol, entry_price, quantity, 0]
+            "INSERT INTO active_investments (user_id, asset_name, asset_symbol, entry_price, quantity, target_sell_price, stop_loss_price, status) VALUES ($1, $2, $3, $4, $5, $6, $7, 'HOLDING') RETURNING *",
+            [user_id, cleanSymbol, cleanSymbol, entry_price, quantity, 0, 0]
         );
         res.status(201).json(newTrade.rows[0]);
     } catch (err) {
