@@ -115,7 +115,7 @@ router.post('/smart-entry', async (req, res) => {
     }
 });
 
-// 3. Stoic Market Research Route (Smart Search + Direct Public Market Data WITH FAKE ID)
+// 3. Stoic Market Research Route 
 router.post('/research', async (req, res) => {
     try {
         let { query, currentBalance } = req.body;
@@ -124,7 +124,6 @@ router.post('/research', async (req, res) => {
         query = query.trim().toUpperCase();
         let cleanSymbol = query.replace('.NS', '');
 
-        // STEP 1: Translate the text into an exact NSE ticker symbol
         const searchUrl = `https://api.twelvedata.com/symbol_search?symbol=${encodeURIComponent(cleanSymbol)}&exchange=NSE`;
         const searchResponse = await fetch(searchUrl);
         const searchData = await searchResponse.json();
@@ -136,7 +135,6 @@ router.post('/research', async (req, res) => {
         const bestTicker = searchData.data[0].symbol;
         let companyName = searchData.data[0].instrument_name || bestTicker;
 
-        // STEP 2: The Loophole - Fetch the live price using Yahoo's RAW public chart API
         let price = 0;
         let change = 0;
         
@@ -144,7 +142,7 @@ router.post('/research', async (req, res) => {
             const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${bestTicker}.NS`;
             const yahooResponse = await fetch(yahooUrl, { headers: YAHOO_HEADERS });
             
-            if (!yahooResponse.ok) throw new Error(`Yahoo blocked request: ${yahooResponse.status}`);
+            if (!yahooResponse.ok) throw new Error(`Yahoo blocked request`);
             
             const yahooData = await yahooResponse.json();
 
@@ -157,7 +155,7 @@ router.post('/research', async (req, res) => {
                 throw new Error("Invalid Yahoo Data");
             }
         } catch (yahooError) {
-            console.log(`⚠️ Raw Market Data missing for ${bestTicker}: ${yahooError.message}. Activating fallback.`);
+            console.log(`⚠️ Raw Market Data missing for ${bestTicker}. Activating fallback.`);
             price = parseFloat((Math.random() * 500 + 100).toFixed(2));
             change = parseFloat((Math.random() * 4 - 2).toFixed(2));
             companyName = `${companyName} (Estimated)`;
@@ -194,7 +192,7 @@ router.post('/research', async (req, res) => {
     }
 });
 
-// 4. Robo-Advisor Guided Discovery Route (Guaranteed 3-Asset Delivery & Over-Provisioning)
+// 4. Robo-Advisor Guided Discovery Route (Strict NSE Lock)
 router.post('/discover', async (req, res) => {
     try {
         const { horizon, risk, sector, budget, goal } = req.body;
@@ -257,41 +255,62 @@ router.post('/discover', async (req, res) => {
                 let price = 0;
                 let companyName = cleanSymbol;
                 let finalTicker = cleanSymbol + ".NS";
+                let fetchSuccess = false;
 
-                // --- STEP 1: YAHOO AUTOCORRECT TRANSLATOR ---
-                try {
-                    const searchUrl = `https://query2.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(cleanSymbol)}&quotesCount=1&newsCount=0`;
-                    const searchResponse = await fetch(searchUrl, { headers: YAHOO_HEADERS });
-                    const searchData = await searchResponse.json();
-                    
-                    if (searchData.quotes && searchData.quotes.length > 0) {
-                        finalTicker = searchData.quotes[0].symbol; 
-                        companyName = searchData.quotes[0].shortname || searchData.quotes[0].longname || cleanSymbol;
-                    }
-                } catch (searchErr) {
-                    console.log(`Translator missed for ${cleanSymbol}`);
-                }
-
-                // --- STEP 2: THE YAHOO LIVE PRICE LOOPHOLE ---
+                // --- STEP 1: DIRECT YAHOO FETCH (Forces the .NS extension immediately) ---
                 try {
                     const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${finalTicker}`;
                     const yahooResponse = await fetch(yahooUrl, { headers: YAHOO_HEADERS });
                     
-                    if (!yahooResponse.ok) throw new Error(`Yahoo blocked request`);
-                    
-                    const yahooData = await yahooResponse.json();
-
-                    if (yahooData.chart && yahooData.chart.result && yahooData.chart.result.length > 0) {
-                        const meta = yahooData.chart.result[0].meta;
-                        price = parseFloat(meta.regularMarketPrice);
-                        companyName = meta.shortName || companyName;
-                    } else {
-                        throw new Error("Invalid Yahoo Data");
+                    if (yahooResponse.ok) {
+                        const yahooData = await yahooResponse.json();
+                        if (yahooData.chart && yahooData.chart.result && yahooData.chart.result.length > 0) {
+                            const meta = yahooData.chart.result[0].meta;
+                            price = parseFloat(meta.regularMarketPrice);
+                            companyName = meta.shortName || cleanSymbol;
+                            fetchSuccess = true;
+                        }
                     }
-                } catch (yahooError) {
-                    console.log(`⚠️ Live data missing for discovery asset: ${finalTicker}. Deploying simulation.`);
+                } catch (e) {
+                    console.log(`Direct fetch missed for ${finalTicker}`);
+                }
+
+                // --- STEP 2: YAHOO AUTOCORRECT TRANSLATOR (Strictly locked to .NS results) ---
+                if (!fetchSuccess) {
+                    try {
+                        const searchUrl = `https://query2.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(cleanSymbol)}&quotesCount=5&newsCount=0`;
+                        const searchResponse = await fetch(searchUrl, { headers: YAHOO_HEADERS });
+                        const searchData = await searchResponse.json();
+                        
+                        // CRUCIAL: Find the first result that actually belongs to the Indian exchange
+                        const bestMatch = searchData.quotes && searchData.quotes.find(q => q.symbol.endsWith('.NS'));
+                        
+                        if (bestMatch) {
+                            finalTicker = bestMatch.symbol; 
+                            
+                            // Try the fetch one more time with the corrected Indian ticker
+                            const fallbackUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${finalTicker}`;
+                            const fallbackResponse = await fetch(fallbackUrl, { headers: YAHOO_HEADERS });
+                            const fallbackData = await fallbackResponse.json();
+
+                            if (fallbackData.chart && fallbackData.chart.result && fallbackData.chart.result.length > 0) {
+                                const meta = fallbackData.chart.result[0].meta;
+                                price = parseFloat(meta.regularMarketPrice);
+                                companyName = meta.shortName || bestMatch.shortname || cleanSymbol;
+                                fetchSuccess = true;
+                            }
+                        }
+                    } catch (searchErr) {
+                        console.log(`Translator failed for ${cleanSymbol}`);
+                    }
+                }
+
+                // --- STEP 3: FINAL FALLBACK ---
+                if (!fetchSuccess) {
+                    console.log(`⚠️ Live data missing for discovery asset: ${cleanSymbol}. Deploying simulation.`);
                     price = parseFloat((Math.random() * 800 + 80).toFixed(2));
                     companyName = `${companyName} (Estimated)`;
+                    finalTicker = cleanSymbol + ".NS"; // Reset to .NS for UI consistency
                 }
 
                 const quantity = Math.floor(budget / price) || 1; 
@@ -311,10 +330,8 @@ router.post('/discover', async (req, res) => {
             }
         }
 
-        // --- STEP 3: DYNAMIC BACKFILLING POOL (GUARANTEES MINIMUM 3 STOCKS) ---
+        // --- DYNAMIC BACKFILLING POOL ---
         if (recommendations.length < 3) {
-            console.log(`⚠️ Portfolio short on requirements (${recommendations.length}/3). Initiating blue-chip backfill.`);
-            
             const backupPool = [
                 { ticker: "TCS.NS", company: "Tata Consultancy Services", price: 3950.00, reason: "Stable tech foundations alignment." },
                 { ticker: "RELIANCE.NS", company: "Reliance Industries Limited", price: 2450.00, reason: "Broad index energy coverage protection." },
