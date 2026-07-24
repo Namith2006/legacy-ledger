@@ -87,7 +87,7 @@ router.post('/analyze/:userId', async (req, res) => {
     }
 });
 
-/// 2. Route to instantly categorize a transaction (Upgraded with Auto-Profit Calculation Engine)
+// 2. Route to instantly categorize a transaction (Dynamic Variable Math Engine)
 router.post('/smart-entry', async (req, res) => {
     try {
         const { rawText } = req.body;
@@ -101,18 +101,20 @@ router.post('/smart-entry', async (req, res) => {
         1. "type": Must be exactly 'income' or 'expense'. 
            - Selling an asset (gold, stock, crypto) brings cash in -> 'income'.
            - Buying an asset takes cash out -> 'expense'.
-        2. "amount": Extract the actual total cash transaction value only (e.g., "sold gold worth 2200" -> 2200).
+        2. "amount": Extract the actual total cash transaction value only.
         3. "category": Choose from: [food, transport, tech, subscriptions, health, entertainment, freelance, allowance, gift, investments, other].
         4. "description": Clean summary. 
-           CRUCIAL FINANCIAL MATH RULE: If the user provides asset trade context involving an original buy rate and a sell rate, you must calculate the absolute profit or loss:
-           - Example math for "sold gold worth 2200 bought at 14900 when gold is 16000":
-             Fractional units sold = 2200 / 16000 = 0.1375 units.
-             Original cost basis = 0.1375 * 14900 = 2048.75.
-             Net Profit = 2200 - 2048.75 = 151.25.
-           - Append this calculated profit clearly into the description string!
-           - Example output format: "Sold Gold (Profit: +₹151.25 | Buy: 14.9k, Sell: 16k)"
+
+        DYNAMIC PROFIT MATH RULES:
+        - Strictly extract the numbers directly from the User Input text. Never reuse default or previous numbers.
+        - Let Total Sale Amount = A, Buy Rate = B, Sell Rate = S.
+        - If B and S are provided:
+          1. Calculate Cost Basis = A * (B / S)
+          2. Calculate Profit = A - Cost Basis
+        - Format the description string strictly using these extracted values:
+          "Sold Asset (Profit: +₹[Calculated Profit] | Buy: [B], Sell: [S])"
         
-        Return ONLY valid JSON matching this structure. Do not include markdown ticks.
+        Return ONLY valid JSON. Do not include markdown wraps or backticks.
         `;
 
         const rawAiText = await generateAIContent(prompt, true);
