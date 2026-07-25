@@ -440,18 +440,33 @@ function App() {
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.45 }} style={{ marginTop: '40px', backgroundColor: '#1e1e1e', padding: '30px', borderRadius: '15px', boxShadow: '0 4px 6px rgba(0,0,0,0.3)', border: '1px solid #333' }}>
         <h2 style={{ margin: '0 0 20px 0', color: '#a3a3a3', fontSize: '1.2rem', textTransform: 'uppercase', letterSpacing: '1px' }}>📊 Cash Flow Analytics</h2>
         {transactions.length > 0 ? (
-          <div style={{ width: '100%', height: '250px' }}>
+          <div style={{ width: '100%', height: '280px' }}> {/* Increased height slightly to accommodate angled text */}
             <ResponsiveContainer width="100%" height="100%">
-              {/* FIX 1: Increased top margin to 25 so the floating numbers don't get cropped */}
-              <BarChart data={[...transactions].reverse()} margin={{ top: 25, right: 10, left: -20, bottom: 0 }}>
+              {/* FIX 1: Increased top margin to 50 so angled numbers don't get cropped */}
+              <BarChart data={[...transactions].reverse()} margin={{ top: 50, right: 10, left: -20, bottom: 0 }}>
                 <XAxis dataKey="description" stroke="#888" tick={{ fill: '#888', fontSize: 12 }} />
                 <Tooltip cursor={{ fill: '#2d2d2d' }} contentStyle={{ backgroundColor: '#121212', border: '1px solid #444', color: '#fff' }} />
                 
-                {/* FIX 2: Added the 'label' prop to automatically print the ₹ amounts on top of the bars */}
+                {/* FIX 2: Custom label function to tilt the text -45 degrees */}
                 <Bar 
                   dataKey="amount" 
                   radius={[4, 4, 0, 0]}
-                  label={{ position: 'top', fill: '#d4d4d4', fontSize: 12, fontWeight: 'bold', formatter: (value) => `₹${value}` }}
+                  label={(props) => {
+                    const { x, y, width, value } = props;
+                    return (
+                      <text 
+                        x={x + width / 2} 
+                        y={y - 8} 
+                        fill="#d4d4d4" 
+                        fontSize={11} 
+                        fontWeight="bold" 
+                        textAnchor="start" 
+                        transform={`rotate(-45, ${x + width / 2}, ${y - 8})`}
+                      >
+                        ₹{value}
+                      </text>
+                    );
+                  }}
                 >
                   {[...transactions].reverse().map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.type === 'income' ? '#4ade80' : '#f87171'} />
