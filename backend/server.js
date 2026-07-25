@@ -22,7 +22,7 @@ app.use('/api/transactions', require('./routes/transactionRoutes'));
 app.use('/api/goals', require('./routes/goalRoutes'));
 app.use('/api/ai', require('./routes/aiRoutes'));
 
-// --- THE WAR ROOM: LIVE MARKET INTELLIGENCE ROUTE (UPGRADED TO YAHOO FINANCE LOOPHOLE) ---
+// --- THE WAR ROOM: LIVE MARKET INTELLIGENCE ROUTE ---
 app.get('/api/investments', async (req, res) => {
     try {
         // Fetch active holdings from Supabase matching your existing schema
@@ -40,34 +40,69 @@ app.get('/api/investments', async (req, res) => {
                 return { ...trade, live_price: trade.entry_price, change_percent: "0.00" };
             }
 
-            // Force Indian NSE symbol formatting (.NS)
-            let cleanSymbol = trade.asset_symbol.replace('.NS', '').toUpperCase() + '.NS';
+            let cleanSymbol = trade.asset_symbol.toUpperCase().trim();
             let livePrice = parseFloat(trade.entry_price);
             let changePercent = 0;
 
-            try {
-                const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${cleanSymbol}`;
-                const yahooResponse = await fetch(yahooUrl, { headers: YAHOO_HEADERS });
-                
-                if (yahooResponse.ok) {
-                    const yahooData = await yahooResponse.json();
-                    if (yahooData.chart && yahooData.chart.result && yahooData.chart.result.length > 0) {
-                        const meta = yahooData.chart.result[0].meta;
-                        livePrice = parseFloat(meta.regularMarketPrice);
+            // 🪙 DIGITAL GOLD REAL-TIME PRICING ENGINE
+            if (cleanSymbol === 'DIGITALGOLD') {
+                try {
+                    // Fetch Global Gold Futures (USD/Troy Ounce) & Live USD to INR exchange rate
+                    const [goldRes, inrRes] = await Promise.all([
+                        fetch('https://query1.finance.yahoo.com/v8/finance/chart/GC=F', { headers: YAHOO_HEADERS }),
+                        fetch('https://query1.finance.yahoo.com/v8/finance/chart/INR=X', { headers: YAHOO_HEADERS })
+                    ]);
+                    
+                    if (goldRes.ok && inrRes.ok) {
+                        const goldData = await goldRes.json();
+                        const inrData = await inrRes.json();
                         
-                        const prevClose = parseFloat(meta.chartPreviousClose);
-                        if (prevClose) {
-                            changePercent = ((livePrice - prevClose) / prevClose) * 100;
-                        }
+                        const goldUsd = parseFloat(goldData.chart.result[0].meta.regularMarketPrice);
+                        const usdInr = parseFloat(inrData.chart.result[0].meta.regularMarketPrice);
+                        
+                        // 1 Troy Ounce = 31.1034768 grams. Math: (USD Price / 31.1) * FX Rate
+                        let pricePerGram = (goldUsd / 31.1034768) * usdInr;
+                        
+                        // Add 9% (6% Customs Duty + 3% GST) for actual domestic Indian market rates
+                        livePrice = pricePerGram * 1.09; 
+
+                        const entryPrice = parseFloat(trade.entry_price);
+                        changePercent = ((livePrice - entryPrice) / entryPrice) * 100;
                     }
-                } else {
-                    throw new Error(`Yahoo blocked request status: ${yahooResponse.status}`);
+                } catch (e) {
+                    console.log("⚠️ Gold price fetch failed. Deploying simulation.");
+                    livePrice = parseFloat(trade.entry_price) + (Math.random() * 200 - 100);
+                    changePercent = (Math.random() * 2 - 1);
                 }
-            } catch (err) {
-                console.log(`⚠️ Live data missing for War Room asset: ${cleanSymbol}. Deploying simulation.`);
-                // Fallback boundary framework to safeguard UI grid rendering
-                livePrice = parseFloat(trade.entry_price) + (Math.random() * 10 - 5);
-                changePercent = (Math.random() * 4 - 2);
+            } else {
+                // 📈 STANDARD INDIAN STOCK ENGINE
+                // Force Indian NSE symbol formatting (.NS)
+                cleanSymbol = cleanSymbol.replace('.NS', '') + '.NS'; 
+
+                try {
+                    const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${cleanSymbol}`;
+                    const yahooResponse = await fetch(yahooUrl, { headers: YAHOO_HEADERS });
+                    
+                    if (yahooResponse.ok) {
+                        const yahooData = await yahooResponse.json();
+                        if (yahooData.chart && yahooData.chart.result && yahooData.chart.result.length > 0) {
+                            const meta = yahooData.chart.result[0].meta;
+                            livePrice = parseFloat(meta.regularMarketPrice);
+                            
+                            const prevClose = parseFloat(meta.chartPreviousClose);
+                            if (prevClose) {
+                                changePercent = ((livePrice - prevClose) / prevClose) * 100;
+                            }
+                        }
+                    } else {
+                        throw new Error(`Yahoo blocked request status: ${yahooResponse.status}`);
+                    }
+                } catch (err) {
+                    console.log(`⚠️ Live data missing for War Room asset: ${cleanSymbol}. Deploying simulation.`);
+                    // Fallback boundary framework to safeguard UI grid rendering
+                    livePrice = parseFloat(trade.entry_price) + (Math.random() * 10 - 5);
+                    changePercent = (Math.random() * 4 - 2);
+                }
             }
 
             return {
@@ -90,7 +125,11 @@ app.post('/api/investments', async (req, res) => {
         const { user_id, asset_symbol, entry_price, quantity } = req.body;
         
         let cleanSymbol = asset_symbol.toUpperCase().trim();
-        if (!cleanSymbol.endsWith('.NS')) cleanSymbol += '.NS'; // Force Indian market
+        
+        // Prevent appending .NS to our Gold tag
+        if (cleanSymbol !== 'DIGITALGOLD' && !cleanSymbol.endsWith('.NS')) {
+            cleanSymbol += '.NS'; 
+        }
 
         // Duplicates symbol into asset_name, inserts 0 defaults to bypass schema blockers
         const newTrade = await db.query(
