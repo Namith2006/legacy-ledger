@@ -442,10 +442,17 @@ function App() {
         {transactions.length > 0 ? (
           <div style={{ width: '100%', height: '250px' }}>
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={[...transactions].reverse()} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+              {/* FIX 1: Increased top margin to 25 so the floating numbers don't get cropped */}
+              <BarChart data={[...transactions].reverse()} margin={{ top: 25, right: 10, left: -20, bottom: 0 }}>
                 <XAxis dataKey="description" stroke="#888" tick={{ fill: '#888', fontSize: 12 }} />
-                <Tooltip cursor={{ fill: '#2d2d2d' }} contentStyle={{ backgroundColor: '#121212', border: '1px solid #444' }} />
-                <Bar dataKey="amount" radius={[4, 4, 0, 0]}>
+                <Tooltip cursor={{ fill: '#2d2d2d' }} contentStyle={{ backgroundColor: '#121212', border: '1px solid #444', color: '#fff' }} />
+                
+                {/* FIX 2: Added the 'label' prop to automatically print the ₹ amounts on top of the bars */}
+                <Bar 
+                  dataKey="amount" 
+                  radius={[4, 4, 0, 0]}
+                  label={{ position: 'top', fill: '#d4d4d4', fontSize: 12, fontWeight: 'bold', formatter: (value) => `₹${value}` }}
+                >
                   {[...transactions].reverse().map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.type === 'income' ? '#4ade80' : '#f87171'} />
                   ))}
