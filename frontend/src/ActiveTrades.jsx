@@ -4,7 +4,7 @@ import { motion } from 'framer-motion';
 const ActiveTrades = () => {
   const [trades, setTrades] = useState([]);
   const [isAdding, setIsAdding] = useState(false);
-  const [newTrade, setNewTrade] = useState({ ticker: '', buy_price: '', quantity: '' });
+  const [newTrade, setNewTrade] = useState({ ticker: 'GOLDBEES.NS', buy_price: '', quantity: '' });
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchTrades = async () => {
@@ -37,15 +37,15 @@ const ActiveTrades = () => {
           user_id: 1,
           asset_symbol: newTrade.ticker,
           entry_price: parseFloat(newTrade.buy_price),
-          quantity: parseInt(newTrade.quantity, 10)
+          quantity: parseFloat(newTrade.quantity)
         })
       });
       if (res.ok) {
-        setNewTrade({ ticker: '', buy_price: '', quantity: '' });
+        setNewTrade({ ticker: 'GOLDBEES.NS', buy_price: '', quantity: '' });
         setIsAdding(false);
         fetchTrades(); 
       } else {
-        alert("Server failed to save the trade.");
+        alert("Server failed to save the investment.");
       }
     } catch (error) {
       alert("Lost connection to server.");
@@ -66,10 +66,11 @@ const ActiveTrades = () => {
     }
   };
 
-  // Master Portfolio Math
-  const totalInvested = trades.reduce((acc, t) => acc + (parseFloat(t.entry_price) * parseInt(t.quantity || 1)), 0);
-  const totalCurrent = trades.reduce((acc, t) => acc + (parseFloat(t.live_price) * parseInt(t.quantity || 1)), 0);
-  const totalROI = totalInvested > 0 ? (((totalCurrent - totalInvested) / totalInvested) * 100).toFixed(2) : 0;
+  // Portfolio Math
+  const totalInvested = trades.reduce((acc, t) => acc + (parseFloat(t.entry_price) * parseFloat(t.quantity || 1)), 0);
+  const totalCurrent = trades.reduce((acc, t) => acc + (parseFloat(t.live_price) * parseFloat(t.quantity || 1)), 0);
+  const totalProfit = totalCurrent - totalInvested;
+  const totalROI = totalInvested > 0 ? ((totalProfit / totalInvested) * 100).toFixed(2) : 0;
   const isPositiveOverall = totalCurrent >= totalInvested;
 
   return (
@@ -81,10 +82,10 @@ const ActiveTrades = () => {
           <h2 style={{ margin: 0, color: '#facc15', textTransform: 'uppercase', fontSize: '1.4rem', letterSpacing: '1px', display: 'flex', alignItems: 'center', gap: '8px' }}>
             ⚡ The War Room
           </h2>
-          <p style={{ margin: '5px 0 0 0', color: '#888', fontSize: '0.9rem' }}>(Active Trades)</p>
+          <p style={{ margin: '5px 0 0 0', color: '#888', fontSize: '0.9rem' }}>(Active Stocks & Commodity Holdings)</p>
         </div>
         <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={() => setIsAdding(!isAdding)} style={{ backgroundColor: '#facc15', color: '#121212', border: 'none', padding: '8px 16px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}>
-          {isAdding ? 'Cancel' : '+ Deploy Capital'}
+          {isAdding ? 'Cancel' : '+ Add Asset / Gold'}
         </motion.button>
       </div>
 
@@ -100,50 +101,54 @@ const ActiveTrades = () => {
             <h3 style={{ margin: '5px 0 0 0', color: isPositiveOverall ? '#4ade80' : '#f87171' }}>₹{totalCurrent.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</h3>
           </div>
           <div style={{ flex: 1, borderLeft: '1px solid #333', paddingLeft: '20px', minWidth: '100px' }}>
-            <span style={{ color: '#888', fontSize: '0.85rem', textTransform: 'uppercase' }}>Total ROI</span>
+            <span style={{ color: '#888', fontSize: '0.85rem', textTransform: 'uppercase' }}>Total Profit / ROI</span>
             <h3 style={{ margin: '5px 0 0 0', color: isPositiveOverall ? '#4ade80' : '#f87171' }}>
-              {isPositiveOverall ? '+' : ''}{totalROI}%
+              {isPositiveOverall ? '+' : ''}₹{totalProfit.toFixed(2)} ({isPositiveOverall ? '+' : ''}{totalROI}%)
             </h3>
           </div>
         </div>
       )}
 
-      {/* --- ADD TRADE FORM --- */}
+      {/* --- ADD ASSET FORM --- */}
       {isAdding && (
         <motion.form initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} onSubmit={handleAddTrade} style={{ backgroundColor: '#2d2d2d', padding: '20px', borderRadius: '10px', marginBottom: '25px', border: '1px solid #444', display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-          <input required type="text" placeholder="Ticker (e.g., TCS)" value={newTrade.ticker} onChange={(e) => setNewTrade({...newTrade, ticker: e.target.value.toUpperCase()})} style={{ flex: '1 1 150px', padding: '12px', borderRadius: '6px', backgroundColor: '#121212', color: 'white', border: '1px solid #555' }} />
-          <input required type="number" step="0.01" placeholder="Buy Price (₹)" value={newTrade.buy_price} onChange={(e) => setNewTrade({...newTrade, buy_price: e.target.value})} style={{ flex: '1 1 120px', padding: '12px', borderRadius: '6px', backgroundColor: '#121212', color: 'white', border: '1px solid #555' }} />
-          <input required type="number" placeholder="Quantity" value={newTrade.quantity} onChange={(e) => setNewTrade({...newTrade, quantity: e.target.value})} style={{ flex: '1 1 120px', padding: '12px', borderRadius: '6px', backgroundColor: '#121212', color: 'white', border: '1px solid #555' }} />
-          <button type="submit" style={{ padding: '12px', backgroundColor: '#4ade80', color: '#121212', fontWeight: 'bold', border: 'none', borderRadius: '6px', cursor: 'pointer', flex: '1 1 100px' }}>Execute</button>
+          <input required type="text" placeholder="Ticker (e.g., GOLDBEES.NS)" value={newTrade.ticker} onChange={(e) => setNewTrade({...newTrade, ticker: e.target.value.toUpperCase()})} style={{ flex: '1 1 180px', padding: '12px', borderRadius: '6px', backgroundColor: '#121212', color: 'white', border: '1px solid #555' }} />
+          <input required type="number" step="0.01" placeholder="Buy Price per Unit (₹)" value={newTrade.buy_price} onChange={(e) => setNewTrade({...newTrade, buy_price: e.target.value})} style={{ flex: '1 1 140px', padding: '12px', borderRadius: '6px', backgroundColor: '#121212', color: 'white', border: '1px solid #555' }} />
+          <input required type="number" step="0.001" placeholder="Quantity / Units" value={newTrade.quantity} onChange={(e) => setNewTrade({...newTrade, quantity: e.target.value})} style={{ flex: '1 1 120px', padding: '12px', borderRadius: '6px', backgroundColor: '#121212', color: 'white', border: '1px solid #555' }} />
+          <button type="submit" style={{ padding: '12px', backgroundColor: '#4ade80', color: '#121212', fontWeight: 'bold', border: 'none', borderRadius: '6px', cursor: 'pointer', flex: '1 1 100px' }}>Track Asset</button>
         </motion.form>
       )}
 
-      {/* --- LIVE TRADES GRID --- */}
+      {/* --- ASSETS & HOLDINGS GRID --- */}
       {isLoading ? (
-        <p style={{ color: '#888', textAlign: 'center' }}>Decrypting market data...</p>
+        <p style={{ color: '#888', textAlign: 'center' }}>Syncing market intelligence...</p>
       ) : trades.length > 0 ? (
         <div style={{ display: 'grid', gap: '15px' }}>
           {trades.map(trade => {
             const entry = parseFloat(trade.entry_price);
             const live = parseFloat(trade.live_price);
-            const qty = parseInt(trade.quantity || 1);
-            const roi = (((live - entry) / entry) * 100).toFixed(2);
-            const isPositive = roi >= 0;
+            const qty = parseFloat(trade.quantity || 1);
+            
+            const investedValue = entry * qty;
+            const currentValue = live * qty;
+            const profitValue = currentValue - investedValue;
+            const roi = ((profitValue / investedValue) * 100).toFixed(2);
+            const isPositive = profitValue >= 0;
 
             return (
               <div key={trade.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#1a1a1a', padding: '15px 20px', borderRadius: '10px', borderLeft: `4px solid ${isPositive ? '#4ade80' : '#f87171'}`, flexWrap: 'wrap', gap: '10px' }}>
-                <div style={{ flex: 1.5, minWidth: '120px' }}>
+                <div style={{ flex: 1.5, minWidth: '140px' }}>
                   <h3 style={{ margin: 0, color: '#fff', fontSize: '1.1rem' }}>{trade.asset_symbol}</h3>
-                  <p style={{ margin: '5px 0 0 0', color: '#888', fontSize: '0.85rem' }}>{qty} Shares @ ₹{entry.toLocaleString('en-IN')}</p>
+                  <p style={{ margin: '5px 0 0 0', color: '#888', fontSize: '0.85rem' }}>{qty} Units @ ₹{entry.toLocaleString('en-IN')}</p>
                 </div>
-                <div style={{ flex: 1, textAlign: 'center', minWidth: '80px' }}>
-                  <p style={{ margin: 0, color: '#888', fontSize: '0.75rem', textTransform: 'uppercase' }}>Live Price</p>
+                <div style={{ flex: 1, textAlign: 'center', minWidth: '100px' }}>
+                  <p style={{ margin: 0, color: '#888', fontSize: '0.75rem', textTransform: 'uppercase' }}>Market Price</p>
                   <h4 style={{ margin: '5px 0 0 0', color: '#fff', fontSize: '1.1rem' }}>₹{live.toLocaleString('en-IN', {minimumFractionDigits: 2})}</h4>
                 </div>
-                <div style={{ flex: 1, textAlign: 'right', minWidth: '80px' }}>
-                  <p style={{ margin: 0, color: '#888', fontSize: '0.75rem', textTransform: 'uppercase' }}>Return</p>
+                <div style={{ flex: 1.2, textAlign: 'right', minWidth: '120px' }}>
+                  <p style={{ margin: '0', color: '#888', fontSize: '0.75rem', textTransform: 'uppercase' }}>Net Profit / ROI</p>
                   <h4 style={{ margin: '5px 0 0 0', color: isPositive ? '#4ade80' : '#f87171', fontSize: '1.1rem' }}>
-                    {isPositive ? '+' : ''}{roi}%
+                    {isPositive ? '+' : ''}₹{profitValue.toFixed(2)} ({isPositive ? '+' : ''}{roi}%)
                   </h4>
                 </div>
                 <div style={{ marginLeft: '10px' }}>
@@ -154,7 +159,7 @@ const ActiveTrades = () => {
           })}
         </div>
       ) : (
-        <p style={{ color: '#888', textAlign: 'center', fontStyle: 'italic', padding: '20px' }}>No active trades found. Waiting for intel...</p>
+        <p style={{ color: '#888', textAlign: 'center', fontStyle: 'italic', padding: '20px' }}>No tracked assets found in the War Room.</p>
       )}
     </motion.div>
   );
