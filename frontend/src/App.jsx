@@ -32,6 +32,9 @@ function App() {
   const [transactions, setTransactions] = useState([]);
   const [goals, setGoals] = useState([]);
   
+  // State for toggling transaction view
+  const [showAllTransactions, setShowAllTransactions] = useState(false);
+
   const [smartInput, setSmartInput] = useState('');
   const [isSmartLoading, setIsSmartLoading] = useState(false);
 
@@ -215,6 +218,9 @@ function App() {
   };
 
   const resetAdvisor = () => { setAdvisorStep(0); setDiscoveryAnswers({ horizon: '', risk: '', sector: '', budget: '', goal: '' }); setDiscoveryResults(null); };
+
+  // Helper variable to dynamically decide which transactions to show
+  const displayedTransactions = showAllTransactions ? transactions : transactions.slice(0, 5);
 
   return (
     <div className="dashboard-container" style={{ maxWidth: '800px', margin: '0 auto', padding: '40px', fontFamily: 'sans-serif' }}>
@@ -474,18 +480,13 @@ function App() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           {goals.length > 0 ? (
             goals.map((goal) => {
-              // Safety checks and math for amounts
               const current = parseFloat(goal.current_amount) || 0;
               const target = parseFloat(goal.target_amount) || 0;
-              
-              // Prevent division by zero errors
               const progressPercentage = target > 0 ? Math.min((current / target) * 100, 100).toFixed(1) : 0;
               
               return (
                 <div key={goal.id} style={{ backgroundColor: '#1e1e1e', padding: '20px', borderRadius: '10px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                    
-                    {/* --- ADDED SUBTITLE WITH AMOUNTS --- */}
                     <div>
                       <h3 style={{ margin: '0', fontSize: '1.2rem', color: '#fff' }}>{goal.title}</h3>
                       <p style={{ margin: '5px 0 0 0', color: '#888', fontSize: '0.9rem', fontWeight: '500' }}>
@@ -493,11 +494,9 @@ function App() {
                       </p>
                     </div>
                     
-                    {/* The Interactive Actions Cluster */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
                       <span style={{ color: '#60a5fa', fontWeight: 'bold' }}>{progressPercentage}%</span>
                       
-                      {/* --- ADD FUNDS INTERACTION ACTION --- */}
                       <motion.button 
                         whileHover={{ scale: 1.1 }} 
                         whileTap={{ scale: 0.95 }}
@@ -508,7 +507,6 @@ function App() {
                         + ₹
                       </motion.button>
 
-                      {/* --- DELETE ELEMENT ACTION --- */}
                       <motion.button 
                         whileHover={{ scale: 1.2 }} 
                         whileTap={{ scale: 0.9 }}
@@ -533,10 +531,38 @@ function App() {
 
       {/* --- RECENT ACTIVITY --- */}
       <motion.div style={{ marginTop: '50px', marginBottom: '40px' }}>
-        <h2 style={{ borderBottom: '1px solid #333', paddingBottom: '10px', marginBottom: '20px', color: '#a3a3a3', textTransform: 'uppercase', fontSize: '1.2rem', letterSpacing: '1px' }}>Recent Activity</h2>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #333', paddingBottom: '10px', marginBottom: '20px' }}>
+          <h2 style={{ margin: 0, color: '#a3a3a3', textTransform: 'uppercase', fontSize: '1.2rem', letterSpacing: '1px' }}>Recent Activity</h2>
+          
+          {/* Toggle Icon Button */}
+          {transactions.length > 5 && (
+            <motion.button 
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => setShowAllTransactions(!showAllTransactions)}
+              style={{ 
+                backgroundColor: '#2d2d2d', 
+                color: '#60a5fa', 
+                border: '1px solid #444', 
+                padding: '6px 12px', 
+                borderRadius: '6px', 
+                cursor: 'pointer', 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: '6px',
+                fontSize: '0.85rem',
+                fontWeight: 'bold'
+              }}
+              title={showAllTransactions ? "Show Recent 5" : "View All Transactions"}
+            >
+              <span>{showAllTransactions ? '👁️‍🗨️ Show Recent 5' : '📜 View All'}</span>
+            </motion.button>
+          )}
+        </div>
+
         <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-          {transactions.length > 0 ? (
-            transactions.map((txn, index) => (
+          {displayedTransactions.length > 0 ? (
+            displayedTransactions.map((txn) => (
               <div key={txn.id} style={{ backgroundColor: '#1e1e1e', padding: '20px', borderRadius: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap' }}>
                 <div>
                   <h3 style={{ margin: '0 0 5px 0', fontSize: '1.1rem', color: '#fff' }}>{txn.description}</h3>
