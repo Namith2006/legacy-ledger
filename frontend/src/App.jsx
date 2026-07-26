@@ -31,7 +31,16 @@ function App() {
   const [isLocked, setIsLocked] = useState(true);
   const [pinInput, setPinInput] = useState('');
   const [authError, setAuthError] = useState(false);
-  const MASTER_PIN = "250931"; // Set your secret PIN here
+  
+  // Upgraded: Dynamic Master PIN
+  const [masterPin, setMasterPin] = useState("250931"); 
+  
+  // OTP Reset States
+  const [resetStep, setResetStep] = useState(0); // 0 = Login, 1 = Enter Phone, 2 = Verify OTP, 3 = New PIN
+  const [generatedOtp, setGeneratedOtp] = useState('');
+  const [otpInput, setOtpInput] = useState('');
+  const [newPinInput, setNewPinInput] = useState('');
+  const [mobileNumber, setMobileNumber] = useState('');
 
   // --- Standard States ---
   const [balanceData, setBalanceData] = useState(null);
@@ -64,7 +73,7 @@ function App() {
   // --- AUTHENTICATION ENGINE ---
   const handlePinSubmit = (e) => {
     e.preventDefault();
-    if (pinInput === MASTER_PIN) {
+    if (pinInput === masterPin) {
       setIsLocked(false);
       setAuthError(false);
     } else {
@@ -92,6 +101,52 @@ function App() {
       }
     } else {
       alert("Biometrics are not supported on this device/browser.");
+    }
+  };
+
+  // --- OTP RECOVERY ENGINE ---
+  const handleForgotPin = () => {
+    setResetStep(1); // Go to the phone number input screen
+    setAuthError(false);
+  };
+
+  const handleSendOtp = (e) => {
+    e.preventDefault();
+    if (mobileNumber.length !== 10) {
+      alert("⚠️ Please enter a valid 10-digit mobile number.");
+      return;
+    }
+    
+    // Generate a random 6-digit OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    setGeneratedOtp(otp);
+    setResetStep(2); // Move to OTP verification screen
+    
+    // Simulate an SMS notification being delivered to the entered number
+    alert(`📱 [SIMULATED SMS MESSAGE]\n\nTo: +91 ${mobileNumber}\n\nLegacy Ledger Security:\nYour One-Time Password (OTP) to reset your vault PIN is: ${otp}\n\nDo not share this code.`);
+  };
+
+  const handleVerifyOtp = (e) => {
+    e.preventDefault();
+    if (otpInput === generatedOtp) {
+      setResetStep(3); // Move to set new PIN screen
+      setOtpInput('');
+    } else {
+      alert("❌ Invalid OTP. Please try again.");
+      setOtpInput('');
+    }
+  };
+
+  const handleSetNewPin = (e) => {
+    e.preventDefault();
+    if (newPinInput.length === 6) {
+      setMasterPin(newPinInput);
+      setResetStep(0); // Return to standard lock screen
+      setNewPinInput('');
+      setMobileNumber(''); // Clear the mobile number for security
+      alert("✅ PIN successfully reset! You can now unlock your vault.");
+    } else {
+      alert("⚠️ PIN must be exactly 6 digits.");
     }
   };
 
@@ -279,37 +334,100 @@ function App() {
           <h2 style={{ color: '#fff', margin: '0 0 5px 0', textTransform: 'uppercase', letterSpacing: '2px' }}>Legacy Ledger</h2>
           <p style={{ color: '#888', marginBottom: '25px', fontSize: '0.9rem' }}>Encrypted Financial Vault</p>
           
-          <form onSubmit={handlePinSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-            <input 
-              type="password" 
-              placeholder="Enter 6-Digit PIN" 
-              value={pinInput}
-              onChange={(e) => setPinInput(e.target.value)}
-              maxLength="6"
-              style={{ padding: '15px', borderRadius: '8px', border: authError ? '1px solid #f87171' : '1px solid #444', backgroundColor: '#121212', color: '#fff', fontSize: '1.2rem', textAlign: 'center', letterSpacing: '5px' }}
-            />
-            {authError && <span style={{ color: '#f87171', fontSize: '0.85rem' }}>Incorrect PIN. Access Denied.</span>}
-            
-            <motion.button 
-              whileHover={{ scale: 1.02 }} 
-              whileTap={{ scale: 0.98 }}
-              type="submit" 
-              style={{ padding: '15px', backgroundColor: '#4ade80', color: '#121212', fontWeight: 'bold', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '1.1rem' }}
-            >
-              Unlock Vault
-            </motion.button>
-          </form>
+          {/* STEP 0: STANDARD LOGIN */}
+          {resetStep === 0 && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+              <form onSubmit={handlePinSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                <input 
+                  type="password" 
+                  placeholder="Enter 6-Digit PIN" 
+                  value={pinInput}
+                  onChange={(e) => setPinInput(e.target.value)}
+                  maxLength="6"
+                  style={{ padding: '15px', borderRadius: '8px', border: authError ? '1px solid #f87171' : '1px solid #444', backgroundColor: '#121212', color: '#fff', fontSize: '1.2rem', textAlign: 'center', letterSpacing: '5px' }}
+                />
+                {authError && <span style={{ color: '#f87171', fontSize: '0.85rem' }}>Incorrect PIN. Access Denied.</span>}
+                
+                <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} type="submit" style={{ padding: '15px', backgroundColor: '#4ade80', color: '#121212', fontWeight: 'bold', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '1.1rem' }}>
+                  Unlock Vault
+                </motion.button>
+              </form>
 
-          <div style={{ margin: '20px 0', color: '#555', fontSize: '0.85rem' }}>OR</div>
+              <button onClick={handleForgotPin} style={{ background: 'none', border: 'none', color: '#888', textDecoration: 'underline', marginTop: '15px', cursor: 'pointer', fontSize: '0.85rem' }}>
+                Forgot PIN?
+              </button>
 
-          <motion.button 
-            whileHover={{ scale: 1.02 }} 
-            whileTap={{ scale: 0.98 }}
-            onClick={handleBiometricUnlock} 
-            style={{ width: '100%', padding: '15px', backgroundColor: '#2d2d2d', color: '#60a5fa', fontWeight: 'bold', border: '1px solid #444', borderRadius: '8px', cursor: 'pointer', fontSize: '1rem', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '10px' }}
-          >
-            <span>👁️‍🗨️</span> Use Biometrics
-          </motion.button>
+              <div style={{ margin: '20px 0', color: '#555', fontSize: '0.85rem' }}>OR</div>
+
+              <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={handleBiometricUnlock} style={{ width: '100%', padding: '15px', backgroundColor: '#2d2d2d', color: '#60a5fa', fontWeight: 'bold', border: '1px solid #444', borderRadius: '8px', cursor: 'pointer', fontSize: '1rem', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '10px' }}>
+                <span>👁️‍🗨️</span> Use Biometrics
+              </motion.button>
+            </motion.div>
+          )}
+
+          {/* STEP 1: ENTER MOBILE NUMBER */}
+          {resetStep === 1 && (
+            <motion.form initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} onSubmit={handleSendOtp} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+              <p style={{ color: '#60a5fa', fontSize: '0.9rem', margin: 0 }}>Enter your registered mobile number.</p>
+              
+              <div style={{ display: 'flex', alignItems: 'center', backgroundColor: '#121212', border: '1px solid #444', borderRadius: '8px', padding: '0 15px' }}>
+                <span style={{ color: '#888', fontWeight: 'bold', marginRight: '10px' }}>+91</span>
+                <input 
+                  type="tel" 
+                  placeholder="Mobile Number" 
+                  value={mobileNumber}
+                  onChange={(e) => setMobileNumber(e.target.value.replace(/\D/g, ''))}
+                  maxLength="10"
+                  style={{ flex: 1, padding: '15px 0', background: 'none', border: 'none', color: '#fff', fontSize: '1.2rem', outline: 'none', letterSpacing: '2px' }}
+                />
+              </div>
+
+              <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} type="submit" style={{ padding: '15px', backgroundColor: '#60a5fa', color: '#121212', fontWeight: 'bold', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '1.1rem' }}>
+                Send OTP
+              </motion.button>
+              <button type="button" onClick={() => setResetStep(0)} style={{ background: 'none', border: 'none', color: '#888', textDecoration: 'underline', cursor: 'pointer', fontSize: '0.85rem' }}>Cancel</button>
+            </motion.form>
+          )}
+
+          {/* STEP 2: VERIFY OTP */}
+          {resetStep === 2 && (
+            <motion.form initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} onSubmit={handleVerifyOtp} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+              <p style={{ color: '#60a5fa', fontSize: '0.9rem', margin: 0 }}>
+                An OTP was sent to +91 ******{mobileNumber.slice(-4)}
+              </p>
+              <input 
+                type="text" 
+                placeholder="Enter 6-Digit OTP" 
+                value={otpInput}
+                onChange={(e) => setOtpInput(e.target.value.replace(/\D/g, ''))}
+                maxLength="6"
+                style={{ padding: '15px', borderRadius: '8px', border: '1px solid #60a5fa', backgroundColor: '#121212', color: '#fff', fontSize: '1.2rem', textAlign: 'center', letterSpacing: '5px' }}
+              />
+              <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} type="submit" style={{ padding: '15px', backgroundColor: '#60a5fa', color: '#121212', fontWeight: 'bold', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '1.1rem' }}>
+                Verify OTP
+              </motion.button>
+              <button type="button" onClick={() => setResetStep(0)} style={{ background: 'none', border: 'none', color: '#888', textDecoration: 'underline', cursor: 'pointer', fontSize: '0.85rem' }}>Cancel</button>
+            </motion.form>
+          )}
+
+          {/* STEP 3: SET NEW PIN */}
+          {resetStep === 3 && (
+            <motion.form initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} onSubmit={handleSetNewPin} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+              <p style={{ color: '#4ade80', fontSize: '0.9rem', margin: 0 }}>OTP Verified! Create a new PIN.</p>
+              <input 
+                type="password" 
+                placeholder="New 6-Digit PIN" 
+                value={newPinInput}
+                onChange={(e) => setNewPinInput(e.target.value)}
+                maxLength="6"
+                style={{ padding: '15px', borderRadius: '8px', border: '1px solid #4ade80', backgroundColor: '#121212', color: '#fff', fontSize: '1.2rem', textAlign: 'center', letterSpacing: '5px' }}
+              />
+              <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} type="submit" style={{ padding: '15px', backgroundColor: '#4ade80', color: '#121212', fontWeight: 'bold', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '1.1rem' }}>
+                Save New PIN
+              </motion.button>
+            </motion.form>
+          )}
+
         </motion.div>
       </div>
     );
