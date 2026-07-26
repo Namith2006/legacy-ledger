@@ -282,10 +282,10 @@ function App() {
           <form onSubmit={handlePinSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
             <input 
               type="password" 
-              placeholder="Enter 4-Digit PIN" 
+              placeholder="Enter 6-Digit PIN" 
               value={pinInput}
               onChange={(e) => setPinInput(e.target.value)}
-              maxLength="4"
+              maxLength="6"
               style={{ padding: '15px', borderRadius: '8px', border: authError ? '1px solid #f87171' : '1px solid #444', backgroundColor: '#121212', color: '#fff', fontSize: '1.2rem', textAlign: 'center', letterSpacing: '5px' }}
             />
             {authError && <span style={{ color: '#f87171', fontSize: '0.85rem' }}>Incorrect PIN. Access Denied.</span>}
