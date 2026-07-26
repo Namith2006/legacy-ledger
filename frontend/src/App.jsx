@@ -27,6 +27,12 @@ const StepButton = ({ label, onClick }) => (
 );
 
 function App() {
+  // --- VAULT SECURITY STATES ---
+  const [isLocked, setIsLocked] = useState(true);
+  const [pinInput, setPinInput] = useState('');
+  const [authError, setAuthError] = useState(false);
+  const MASTER_PIN = "250931"; // Set your secret PIN here
+
   // --- Standard States ---
   const [balanceData, setBalanceData] = useState(null);
   const [transactions, setTransactions] = useState([]);
@@ -55,6 +61,40 @@ function App() {
   });
   const [discoveryResults, setDiscoveryResults] = useState(null);
 
+  // --- AUTHENTICATION ENGINE ---
+  const handlePinSubmit = (e) => {
+    e.preventDefault();
+    if (pinInput === MASTER_PIN) {
+      setIsLocked(false);
+      setAuthError(false);
+    } else {
+      setAuthError(true);
+      setPinInput('');
+    }
+  };
+
+  const handleBiometricUnlock = async () => {
+    // Checks if the device supports WebAuthn (Biometrics)
+    if (window.PublicKeyCredential) {
+      try {
+        // This triggers the device's native Fingerprint/FaceID prompt
+        await navigator.credentials.get({
+          publicKey: {
+            challenge: new Uint8Array(32),
+            rpId: window.location.hostname,
+            userVerification: "required",
+          }
+        });
+        setIsLocked(false);
+      } catch (err) {
+        console.log("Biometric auth failed or cancelled", err);
+        alert("Biometric verification failed. Please use PIN.");
+      }
+    } else {
+      alert("Biometrics are not supported on this device/browser.");
+    }
+  };
+
   // Fetch initial dashboard data
   useEffect(() => {
     const fetchData = async () => {
@@ -77,8 +117,12 @@ function App() {
         console.error("❌ Dashboard Load Error:", err);
       }
     };
-    fetchData();
-  }, []);
+    
+    // Only fetch data if the vault is unlocked
+    if (!isLocked) {
+      fetchData();
+    }
+  }, [isLocked]);
 
   // --- Create New Goal Function ---
   const handleAddGoal = async (e) => {
@@ -222,6 +266,56 @@ function App() {
   // Helper variable to dynamically decide which transactions to show
   const displayedTransactions = showAllTransactions ? transactions : transactions.slice(0, 5);
 
+  // --- THE VAULT LOCK SCREEN INTERCEPTOR ---
+  if (isLocked) {
+    return (
+      <div style={{ height: '100vh', display: 'flex', justifyContent: 'center', alignItems: 'center', backgroundColor: '#121212', fontFamily: 'sans-serif' }}>
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.9 }} 
+          animate={{ opacity: 1, scale: 1 }} 
+          style={{ backgroundColor: '#1e1e1e', padding: '40px', borderRadius: '15px', textAlign: 'center', boxShadow: '0 10px 25px rgba(0,0,0,0.5)', border: '1px solid #333', maxWidth: '400px', width: '90%' }}
+        >
+          <div style={{ fontSize: '3rem', marginBottom: '10px' }}>🔒</div>
+          <h2 style={{ color: '#fff', margin: '0 0 5px 0', textTransform: 'uppercase', letterSpacing: '2px' }}>Legacy Ledger</h2>
+          <p style={{ color: '#888', marginBottom: '25px', fontSize: '0.9rem' }}>Encrypted Financial Vault</p>
+          
+          <form onSubmit={handlePinSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+            <input 
+              type="password" 
+              placeholder="Enter 4-Digit PIN" 
+              value={pinInput}
+              onChange={(e) => setPinInput(e.target.value)}
+              maxLength="4"
+              style={{ padding: '15px', borderRadius: '8px', border: authError ? '1px solid #f87171' : '1px solid #444', backgroundColor: '#121212', color: '#fff', fontSize: '1.2rem', textAlign: 'center', letterSpacing: '5px' }}
+            />
+            {authError && <span style={{ color: '#f87171', fontSize: '0.85rem' }}>Incorrect PIN. Access Denied.</span>}
+            
+            <motion.button 
+              whileHover={{ scale: 1.02 }} 
+              whileTap={{ scale: 0.98 }}
+              type="submit" 
+              style={{ padding: '15px', backgroundColor: '#4ade80', color: '#121212', fontWeight: 'bold', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '1.1rem' }}
+            >
+              Unlock Vault
+            </motion.button>
+          </form>
+
+          <div style={{ margin: '20px 0', color: '#555', fontSize: '0.85rem' }}>OR</div>
+
+          <motion.button 
+            whileHover={{ scale: 1.02 }} 
+            whileTap={{ scale: 0.98 }}
+            onClick={handleBiometricUnlock} 
+            style={{ width: '100%', padding: '15px', backgroundColor: '#2d2d2d', color: '#60a5fa', fontWeight: 'bold', border: '1px solid #444', borderRadius: '8px', cursor: 'pointer', fontSize: '1rem', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '10px' }}
+          >
+            <span>👁️‍🗨️</span> Use Biometrics
+          </motion.button>
+        </motion.div>
+      </div>
+    );
+  }
+
+  // --- MAIN DASHBOARD (UNLOCKED) ---
   return (
     <div className="dashboard-container" style={{ maxWidth: '800px', margin: '0 auto', padding: '40px', fontFamily: 'sans-serif' }}>
       
@@ -440,14 +534,12 @@ function App() {
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.45 }} style={{ marginTop: '40px', backgroundColor: '#1e1e1e', padding: '30px', borderRadius: '15px', boxShadow: '0 4px 6px rgba(0,0,0,0.3)', border: '1px solid #333' }}>
         <h2 style={{ margin: '0 0 20px 0', color: '#a3a3a3', fontSize: '1.2rem', textTransform: 'uppercase', letterSpacing: '1px' }}>📊 Cash Flow Analytics</h2>
         {transactions.length > 0 ? (
-          <div style={{ width: '100%', height: '280px' }}> {/* Increased height slightly to accommodate angled text */}
+          <div style={{ width: '100%', height: '280px' }}>
             <ResponsiveContainer width="100%" height="100%">
-              {/* FIX 1: Increased top margin to 50 so angled numbers don't get cropped */}
               <BarChart data={[...transactions].reverse()} margin={{ top: 50, right: 10, left: -20, bottom: 0 }}>
                 <XAxis dataKey="description" stroke="#888" tick={{ fill: '#888', fontSize: 12 }} />
                 <Tooltip cursor={{ fill: '#2d2d2d' }} contentStyle={{ backgroundColor: '#121212', border: '1px solid #444', color: '#fff' }} />
                 
-                {/* FIX 2: Custom label function to tilt the text -45 degrees */}
                 <Bar 
                   dataKey="amount" 
                   radius={[4, 4, 0, 0]}
