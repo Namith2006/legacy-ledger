@@ -32,8 +32,9 @@ function App() {
   const [pinInput, setPinInput] = useState('');
   const [authError, setAuthError] = useState(false);
   
-  // Upgraded: Dynamic Master PIN
+  // Upgraded: Dynamic Master PIN & Registered Anchor
   const [masterPin, setMasterPin] = useState("250931"); 
+  const REGISTERED_MOBILE = "9019974413"; // The ONLY number allowed to reset the PIN
   
   // OTP Reset States
   const [resetStep, setResetStep] = useState(0); // 0 = Login, 1 = Enter Phone, 2 = Verify OTP, 3 = New PIN
@@ -112,8 +113,16 @@ function App() {
 
   const handleSendOtp = (e) => {
     e.preventDefault();
+    
     if (mobileNumber.length !== 10) {
       alert("⚠️ Please enter a valid 10-digit mobile number.");
+      return;
+    }
+
+    // 🛡️ SECURITY FIX: Block any number that isn't the registered owner
+    if (mobileNumber !== REGISTERED_MOBILE) {
+      alert("⛔ SECURITY ALERT: Unrecognized mobile number. Access Denied.");
+      setMobileNumber(''); // Wipe the malicious input
       return;
     }
     
@@ -385,7 +394,7 @@ function App() {
               <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} type="submit" style={{ padding: '15px', backgroundColor: '#60a5fa', color: '#121212', fontWeight: 'bold', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '1.1rem' }}>
                 Send OTP
               </motion.button>
-              <button type="button" onClick={() => setResetStep(0)} style={{ background: 'none', border: 'none', color: '#888', textDecoration: 'underline', cursor: 'pointer', fontSize: '0.85rem' }}>Cancel</button>
+              <button type="button" onClick={() => { setResetStep(0); setMobileNumber(''); }} style={{ background: 'none', border: 'none', color: '#888', textDecoration: 'underline', cursor: 'pointer', fontSize: '0.85rem' }}>Cancel</button>
             </motion.form>
           )}
 
@@ -406,7 +415,7 @@ function App() {
               <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} type="submit" style={{ padding: '15px', backgroundColor: '#60a5fa', color: '#121212', fontWeight: 'bold', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '1.1rem' }}>
                 Verify OTP
               </motion.button>
-              <button type="button" onClick={() => setResetStep(0)} style={{ background: 'none', border: 'none', color: '#888', textDecoration: 'underline', cursor: 'pointer', fontSize: '0.85rem' }}>Cancel</button>
+              <button type="button" onClick={() => { setResetStep(0); setMobileNumber(''); setOtpInput(''); }} style={{ background: 'none', border: 'none', color: '#888', textDecoration: 'underline', cursor: 'pointer', fontSize: '0.85rem' }}>Cancel</button>
             </motion.form>
           )}
 
