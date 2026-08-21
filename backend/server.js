@@ -25,11 +25,8 @@ app.use('/api/ai', require('./routes/aiRoutes'));
 // --- THE WAR ROOM: LIVE MARKET INTELLIGENCE ROUTE ---
 app.get('/api/investments', async (req, res) => {
     try {
-        // IMPROVEMENT 1: Dynamic User ID instead of hardcoded [1]
-        const { user_id } = req.query;
-        if (!user_id) {
-            return res.status(400).json({ error: "Missing user_id parameter." });
-        }
+        // IMPROVEMENT 1: Dynamic User ID with a Demo Mode fallback to 1
+        const user_id = req.query.user_id || 1;
 
         const result = await db.query(
             "SELECT * FROM active_investments WHERE user_id = $1 AND status = 'HOLDING'", 
