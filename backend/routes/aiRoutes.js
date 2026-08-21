@@ -118,8 +118,31 @@ router.post('/smart-entry', async (req, res) => {
         `;
 
         const rawAiText = await generateAIContent(prompt, true);
-        let cleanJson = rawAiText.replace(/```json/gi, '').replace(/```/gi, '').trim();
-        const parsedData = JSON.parse(cleanJson);
+        
+        // --- IMPROVEMENT 1: ROBUST PARSING & FALLBACK ---
+        const clean = rawAiText.replace(/```json/gi, '').replace(/```/gi, '').trim();
+        let parsedData;
+        
+        try {
+            parsedData = JSON.parse(clean);
+        } catch (e) {
+            // Fallback: attempt to extract JSON-like substring
+            const jsonMatch = clean.match(/(\{[\s\S]*\})/m);
+            if (jsonMatch) {
+                try {
+                    parsedData = JSON.parse(jsonMatch[0]);
+                } catch (nestedErr) {
+                    return res.status(422).json({ error: 'AI returned invalid JSON format', rawOutput: rawAiText });
+                }
+            } else {
+                return res.status(422).json({ error: 'AI returned invalid JSON format', rawOutput: rawAiText });
+            }
+        }
+
+        // Validate shape manually
+        if (!parsedData || typeof parsedData !== 'object' || Array.isArray(parsedData)) {
+            return res.status(422).json({ error: 'Parsed output invalid shape', rawOutput: rawAiText });
+        }
 
         res.json({ message: "Smart extraction successful", data: parsedData });
     } catch (err) {
@@ -227,28 +250,50 @@ router.post('/discover', async (req, res) => {
 
         const rawAiText = await generateAIContent(prompt, true);
         
-        let tickers = [];
+        // --- IMPROVEMENT 2: ROBUST PARSING & FALLBACK FOR ARRAYS ---
+        const clean = rawAiText.replace(/```json/gi, '').replace(/```/gi, '').trim();
+        let parsed;
+        
         try {
-            const cleanJson = rawAiText.replace(/```json/gi, '').replace(/```/gi, '').trim();
-            const parsed = JSON.parse(cleanJson);
-            
-            if (Array.isArray(parsed)) {
-                tickers = parsed;
-            } else if (parsed && Array.isArray(parsed.tickers)) {
-                tickers = parsed.tickers;
-            } else if (typeof parsed === 'object' && parsed !== null) {
-                const keys = Object.keys(parsed);
-                for (let key of keys) {
-                    if (Array.isArray(parsed[key])) {
-                        tickers = parsed[key];
-                        break;
-                    }
+            parsed = JSON.parse(clean);
+        } catch (e) {
+            // Fallback: attempt to extract JSON-like substring (object or array)
+            const jsonMatch = clean.match(/(\{[\s\S]*\})|(\[[\s\S]*\])/m);
+            if (jsonMatch) {
+                try {
+                    parsed = JSON.parse(jsonMatch[0]);
+                } catch (nestedErr) {
+                    return res.status(422).json({ error: 'AI returned invalid JSON format', rawOutput: rawAiText });
+                }
+            } else {
+                // Secondary fallback if it just lists strings in quotes
+                const matches = rawAiText.match(/"([^"]+)"/g);
+                if (matches) {
+                    parsed = matches.map(m => m.replace(/"/g, ''));
+                } else {
+                    return res.status(422).json({ error: 'AI returned invalid JSON format', rawOutput: rawAiText });
                 }
             }
-        } catch (parseError) {
-            const matches = rawAiText.match(/"([^"]+)"/g);
-            if (matches) {
-                tickers = matches.map(m => m.replace(/"/g, ''));
+        }
+
+        // Validate shape manually
+        if (!parsed || typeof parsed !== 'object') {
+            return res.status(422).json({ error: 'Parsed output invalid shape', rawOutput: rawAiText });
+        }
+
+        let tickers = [];
+        
+        if (Array.isArray(parsed)) {
+            tickers = parsed;
+        } else if (parsed && Array.isArray(parsed.tickers)) {
+            tickers = parsed.tickers;
+        } else if (typeof parsed === 'object' && parsed !== null) {
+            const keys = Object.keys(parsed);
+            for (let key of keys) {
+                if (Array.isArray(parsed[key])) {
+                    tickers = parsed[key];
+                    break;
+                }
             }
         }
 

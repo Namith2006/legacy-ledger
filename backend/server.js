@@ -1,12 +1,8 @@
-require('dotenv').config(); 
 const express = require('express');
 const cors = require('cors');
-const db = require('./db');
-const jwt = require('jsonwebtoken'); // 👈 ADD THIS
-const auth = require('./middleware/auth'); // 👈 ADD THIS
-require('dotenv').config(); // THIS MUST BE LINE 1
-const express = require('express');
-const cors = require('cors');
+const jwt = require('jsonwebtoken');
+const helmet = require('helmet'); // 🛡️ NEW: Secures HTTP headers
+const rateLimit = require('express-rate-limit'); // ⏱️ NEW: Rate limiting
 const db = require('./db');
 
 const app = express();
@@ -18,38 +14,74 @@ const YAHOO_HEADERS = {
     'Accept': 'application/json'
 };
 
-// Middleware
-app.use(cors());
+// --- SECURITY MIDDLEWARE ---
+app.use(helmet()); // Protects against common web vulnerabilities
+
+// Secure CORS configuration
+app.use(cors({ 
+    origin: process.env.CORS_ORIGIN || '*' // Allows your frontend, blocks unknown sites
+}));
+
 app.use(express.json());
 
-// Routes (Make sure you apply input validation inside these files too!)
+// --- RATE LIMITERS ---
+// 1. General App Limiter (Matches reviewer's example: ~10 mins, 60 requests)
+const generalLimiter = rateLimit({
+    windowMs: 10 * 60 * 1000, 
+    max: 60,
+    message: { error: "Too many requests from this IP, please try again after 10 minutes." }
+});
+app.use(generalLimiter); // Applies to all routes by default
+
+// 2. Strict Limiter for Expensive Endpoints (AI & Market Data)
+const strictApiLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 15, // Only 15 requests allowed!
+    message: { error: "API limit reached to prevent abuse. Please wait 15 minutes." }
+});
+
+// --- JWT AUTHENTICATION MIDDLEWARE ---
+const auth = (req, res, next) => {
+    const authHeader = req.headers.authorization;
+    const token = authHeader && authHeader.split(' ')[1];
+    
+    if (!token) {
+        return res.status(401).json({ error: 'No token provided' });
+    }
+    
+    try {
+        req.user = jwt.verify(token, process.env.JWT_SECRET);
+        next();
+    } catch (err) {
+        return res.status(401).json({ error: 'Invalid token' });
+    }
+};
+
+// --- AUTH ROUTE: DEMO LOGIN ---
+app.post('/api/auth/demo', (req, res) => {
+    const demoUser = { id: 1, name: 'demo' };
+    const token = jwt.sign(demoUser, process.env.JWT_SECRET, { expiresIn: '7d' });
+    res.json({ token, user: demoUser });
+});
+
+// Routes
 app.use('/api/users', require('./routes/userRoutes'));
 app.use('/api/transactions', require('./routes/transactionRoutes'));
 app.use('/api/goals', require('./routes/goalRoutes'));
-app.use('/api/ai', require('./routes/aiRoutes'));
-// --- AUTHENTICATION: DEMO LOGIN ROUTE ---
-app.post('/api/auth/demo', (req, res) => {
-    // Create a mock user
-    const demoUser = { id: 1, name: 'demo_user' };
-    
-    // Sign the token (Valid for 7 days)
-    const token = jwt.sign(demoUser, process.env.JWT_SECRET, { expiresIn: '7d' });
-    
-    // Send the token back to the frontend
-    res.json({ token, user: demoUser });
-});
-// --- THE WAR ROOM: LIVE MARKET INTELLIGENCE ROUTE ---
-// 🛠️ CHANGE: Added 'auth' middleware here 👇
-app.get('/api/investments', auth, async (req, res) => {
+// Applies the strict limiter ONLY to the AI routes
+app.use('/api/ai', strictApiLimiter, require('./routes/aiRoutes'));
+
+// --- THE WAR ROOM: LIVE MARKET INTELLIGENCE ROUTE (SECURED WITH AUTH) ---
+// Example for the GET route:
+app.get('/api/investments', strictApiLimiter, auth, async (req, res) => {
     try {
-        // 🛠️ CHANGE: We now get the ID securely from the verified token!
-        const user_id = req.user.id; 
+        // Replaced hardcoded id with authenticated user's id
+        const user_id = req.user.id;
 
         const result = await db.query(
             "SELECT * FROM active_investments WHERE user_id = $1 AND status = 'HOLDING'", 
             [user_id]
         );
-        // ... (the rest of the Yahoo Finance code stays exactly the same!)
         const trades = result.rows;
 
         if (trades.length === 0) return res.json([]);
@@ -63,11 +95,9 @@ app.get('/api/investments', auth, async (req, res) => {
             let livePrice = parseFloat(trade.entry_price);
             let changePercent = 0;
 
-            // IMPROVEMENT 2: AbortController to prevent hanging API requests
             const abortController = new AbortController();
-            const timeoutId = setTimeout(() => abortController.abort(), 8000); // 8-second timeout
+            const timeoutId = setTimeout(() => abortController.abort(), 8000);
 
-            // 🪙 DIGITAL GOLD REAL-TIME PRICING ENGINE
             if (cleanSymbol === 'DIGITALGOLD') {
                 try {
                     const [goldRes, inrRes] = await Promise.all([
@@ -96,7 +126,6 @@ app.get('/api/investments', auth, async (req, res) => {
                     changePercent = (Math.random() * 2 - 1);
                 }
             } else {
-                // 📈 STANDARD INDIAN STOCK ENGINE
                 cleanSymbol = cleanSymbol.replace('.NS', '') + '.NS'; 
 
                 try {
@@ -140,18 +169,17 @@ app.get('/api/investments', auth, async (req, res) => {
     }
 });
 
-// --- DEPLOY CAPITAL: SAVE NEW TRADE ---
-// 🛠️ CHANGE: Added 'auth' middleware here 👇
-app.post('/api/investments', auth, async (req, res) => {
+// --- DEPLOY CAPITAL: SAVE NEW TRADE (SECURED WITH AUTH) ---
+// Example for the POST route:
+app.post('/api/investments', strictApiLimiter, auth, async (req, res) => {
     try {
-        // 🛠️ CHANGE: Pull user_id from token (req.user.id), not the body
+        // Replaced hardcoded id with authenticated user's id
         const user_id = req.user.id;
         const { asset_symbol, entry_price, quantity } = req.body;
         
         if (!asset_symbol || entry_price === undefined || quantity === undefined) {
             return res.status(400).json({ error: "Missing required investment parameters." });
         }
-        // ... (the rest of the code stays exactly the same!)
         if (isNaN(entry_price) || isNaN(quantity) || entry_price < 0 || quantity <= 0) {
             return res.status(400).json({ error: "Price and quantity must be valid positive numbers." });
         }
@@ -173,13 +201,16 @@ app.post('/api/investments', auth, async (req, res) => {
     }
 });
 
-// --- CLOSE POSITION: DELETE TRADE ---
-app.delete('/api/investments/:id', async (req, res) => {
+// --- CLOSE POSITION: DELETE TRADE (SECURED WITH AUTH) ---
+app.delete('/api/investments/:id', auth, async (req, res) => {
     try {
         const { id } = req.params;
+        const user_id = req.user.id;
+
         if (!id) return res.status(400).json({ error: "Trade ID required." });
 
-        await db.query("DELETE FROM active_investments WHERE id = $1", [id]);
+        // Ensures a user can only delete their own investments
+        await db.query("DELETE FROM active_investments WHERE id = $1 AND user_id = $2", [id, user_id]);
         res.json({ message: "Position Closed" });
     } catch (err) {
         console.error("Delete Trade Error:", err.message);
@@ -193,9 +224,9 @@ app.get('/api/ping', (req, res) => {
 });
 
 app.get('/', (req, res) => {
-  res.send('Legacy Ledger API is running!');
+    res.send('Legacy Ledger API is running!');
 });
 
 app.listen(PORT, () => {
-  console.log(`Server is running on http://localhost:${PORT}`);
+    console.log(`🚀 Server is running on port ${PORT}`);
 });
