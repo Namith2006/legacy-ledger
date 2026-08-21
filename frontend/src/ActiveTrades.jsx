@@ -12,7 +12,12 @@ const ActiveTrades = () => {
 
   const fetchTrades = async () => {
     try {
-      const res = await fetch('https://legacy-ledger.onrender.com/api/investments');
+      // 🛠️ USE THIS FOR LOCAL TESTING:
+      const res = await fetch('http://localhost:5000/api/investments?user_id=1');
+      
+      // 🌐 WHEN YOU DEPLOY, SWAP IT BACK TO THIS:
+      // const res = await fetch('https://legacy-ledger.onrender.com/api/investments?user_id=1');
+
       if (res.ok) {
         const data = await res.json();
         setTrades(data);

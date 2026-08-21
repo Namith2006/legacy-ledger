@@ -16,7 +16,7 @@ const YAHOO_HEADERS = {
 app.use(cors());
 app.use(express.json());
 
-// Routes
+// Routes (Make sure you apply input validation inside these files too!)
 app.use('/api/users', require('./routes/userRoutes'));
 app.use('/api/transactions', require('./routes/transactionRoutes'));
 app.use('/api/goals', require('./routes/goalRoutes'));
@@ -25,16 +25,20 @@ app.use('/api/ai', require('./routes/aiRoutes'));
 // --- THE WAR ROOM: LIVE MARKET INTELLIGENCE ROUTE ---
 app.get('/api/investments', async (req, res) => {
     try {
-        // Fetch active holdings from Supabase matching your existing schema
+        // IMPROVEMENT 1: Dynamic User ID instead of hardcoded [1]
+        const { user_id } = req.query;
+        if (!user_id) {
+            return res.status(400).json({ error: "Missing user_id parameter." });
+        }
+
         const result = await db.query(
             "SELECT * FROM active_investments WHERE user_id = $1 AND status = 'HOLDING'", 
-            [1]
+            [user_id]
         );
         const trades = result.rows;
 
         if (trades.length === 0) return res.json([]);
 
-        // Map through investments and fetch real-time Yahoo data concurrently
         const liveTrades = await Promise.all(trades.map(async (trade) => {
             if (!trade.asset_symbol) {
                 return { ...trade, live_price: trade.entry_price, change_percent: "0.00" };
@@ -44,14 +48,18 @@ app.get('/api/investments', async (req, res) => {
             let livePrice = parseFloat(trade.entry_price);
             let changePercent = 0;
 
+            // IMPROVEMENT 2: AbortController to prevent hanging API requests
+            const abortController = new AbortController();
+            const timeoutId = setTimeout(() => abortController.abort(), 8000); // 8-second timeout
+
             // 🪙 DIGITAL GOLD REAL-TIME PRICING ENGINE
             if (cleanSymbol === 'DIGITALGOLD') {
                 try {
-                    // Fetch Global Gold Futures (USD/Troy Ounce) & Live USD to INR exchange rate
                     const [goldRes, inrRes] = await Promise.all([
-                        fetch('https://query1.finance.yahoo.com/v8/finance/chart/GC=F', { headers: YAHOO_HEADERS }),
-                        fetch('https://query1.finance.yahoo.com/v8/finance/chart/INR=X', { headers: YAHOO_HEADERS })
+                        fetch('https://query1.finance.yahoo.com/v8/finance/chart/GC=F', { headers: YAHOO_HEADERS, signal: abortController.signal }),
+                        fetch('https://query1.finance.yahoo.com/v8/finance/chart/INR=X', { headers: YAHOO_HEADERS, signal: abortController.signal })
                     ]);
+                    clearTimeout(timeoutId);
                     
                     if (goldRes.ok && inrRes.ok) {
                         const goldData = await goldRes.json();
@@ -60,28 +68,26 @@ app.get('/api/investments', async (req, res) => {
                         const goldUsd = parseFloat(goldData.chart.result[0].meta.regularMarketPrice);
                         const usdInr = parseFloat(inrData.chart.result[0].meta.regularMarketPrice);
                         
-                        // 1 Troy Ounce = 31.1034768 grams. Math: (USD Price / 31.1) * FX Rate
                         let pricePerGram = (goldUsd / 31.1034768) * usdInr;
-                        
-                        // Add 9% (6% Customs Duty + 3% GST) for actual domestic Indian market rates
                         livePrice = pricePerGram * 1.09; 
 
                         const entryPrice = parseFloat(trade.entry_price);
                         changePercent = ((livePrice - entryPrice) / entryPrice) * 100;
                     }
                 } catch (e) {
+                    clearTimeout(timeoutId);
                     console.log("⚠️ Gold price fetch failed. Deploying simulation.");
                     livePrice = parseFloat(trade.entry_price) + (Math.random() * 200 - 100);
                     changePercent = (Math.random() * 2 - 1);
                 }
             } else {
                 // 📈 STANDARD INDIAN STOCK ENGINE
-                // Force Indian NSE symbol formatting (.NS)
                 cleanSymbol = cleanSymbol.replace('.NS', '') + '.NS'; 
 
                 try {
                     const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${cleanSymbol}`;
-                    const yahooResponse = await fetch(yahooUrl, { headers: YAHOO_HEADERS });
+                    const yahooResponse = await fetch(yahooUrl, { headers: YAHOO_HEADERS, signal: abortController.signal });
+                    clearTimeout(timeoutId);
                     
                     if (yahooResponse.ok) {
                         const yahooData = await yahooResponse.json();
@@ -98,8 +104,8 @@ app.get('/api/investments', async (req, res) => {
                         throw new Error(`Yahoo blocked request status: ${yahooResponse.status}`);
                     }
                 } catch (err) {
+                    clearTimeout(timeoutId);
                     console.log(`⚠️ Live data missing for War Room asset: ${cleanSymbol}. Deploying simulation.`);
-                    // Fallback boundary framework to safeguard UI grid rendering
                     livePrice = parseFloat(trade.entry_price) + (Math.random() * 10 - 5);
                     changePercent = (Math.random() * 4 - 2);
                 }
@@ -124,17 +130,23 @@ app.post('/api/investments', async (req, res) => {
     try {
         const { user_id, asset_symbol, entry_price, quantity } = req.body;
         
-        let cleanSymbol = asset_symbol.toUpperCase().trim();
+        // IMPROVEMENT 3: Strict Input Validation
+        if (!user_id || !asset_symbol || entry_price === undefined || quantity === undefined) {
+            return res.status(400).json({ error: "Missing required investment parameters." });
+        }
+        if (isNaN(entry_price) || isNaN(quantity) || entry_price < 0 || quantity <= 0) {
+            return res.status(400).json({ error: "Price and quantity must be valid positive numbers." });
+        }
+
+        let cleanSymbol = String(asset_symbol).toUpperCase().trim();
         
-        // Prevent appending .NS to our Gold tag
         if (cleanSymbol !== 'DIGITALGOLD' && !cleanSymbol.endsWith('.NS')) {
             cleanSymbol += '.NS'; 
         }
 
-        // Duplicates symbol into asset_name, inserts 0 defaults to bypass schema blockers
         const newTrade = await db.query(
             "INSERT INTO active_investments (user_id, asset_name, asset_symbol, entry_price, quantity, target_sell_price, stop_loss_price, status) VALUES ($1, $2, $3, $4, $5, $6, $7, 'HOLDING') RETURNING *",
-            [user_id, cleanSymbol, cleanSymbol, entry_price, quantity, 0, 0]
+            [user_id, cleanSymbol, cleanSymbol, parseFloat(entry_price), parseFloat(quantity), 0, 0]
         );
         res.status(201).json(newTrade.rows[0]);
     } catch (err) {
@@ -147,6 +159,8 @@ app.post('/api/investments', async (req, res) => {
 app.delete('/api/investments/:id', async (req, res) => {
     try {
         const { id } = req.params;
+        if (!id) return res.status(400).json({ error: "Trade ID required." });
+
         await db.query("DELETE FROM active_investments WHERE id = $1", [id]);
         res.json({ message: "Position Closed" });
     } catch (err) {
