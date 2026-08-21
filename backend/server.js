@@ -1,3 +1,9 @@
+require('dotenv').config(); 
+const express = require('express');
+const cors = require('cors');
+const db = require('./db');
+const jwt = require('jsonwebtoken'); // 👈 ADD THIS
+const auth = require('./middleware/auth'); // 👈 ADD THIS
 require('dotenv').config(); // THIS MUST BE LINE 1
 const express = require('express');
 const cors = require('cors');
@@ -21,17 +27,29 @@ app.use('/api/users', require('./routes/userRoutes'));
 app.use('/api/transactions', require('./routes/transactionRoutes'));
 app.use('/api/goals', require('./routes/goalRoutes'));
 app.use('/api/ai', require('./routes/aiRoutes'));
-
+// --- AUTHENTICATION: DEMO LOGIN ROUTE ---
+app.post('/api/auth/demo', (req, res) => {
+    // Create a mock user
+    const demoUser = { id: 1, name: 'demo_user' };
+    
+    // Sign the token (Valid for 7 days)
+    const token = jwt.sign(demoUser, process.env.JWT_SECRET, { expiresIn: '7d' });
+    
+    // Send the token back to the frontend
+    res.json({ token, user: demoUser });
+});
 // --- THE WAR ROOM: LIVE MARKET INTELLIGENCE ROUTE ---
-app.get('/api/investments', async (req, res) => {
+// 🛠️ CHANGE: Added 'auth' middleware here 👇
+app.get('/api/investments', auth, async (req, res) => {
     try {
-        // IMPROVEMENT 1: Dynamic User ID with a Demo Mode fallback to 1
-        const user_id = req.query.user_id || 1;
+        // 🛠️ CHANGE: We now get the ID securely from the verified token!
+        const user_id = req.user.id; 
 
         const result = await db.query(
             "SELECT * FROM active_investments WHERE user_id = $1 AND status = 'HOLDING'", 
             [user_id]
         );
+        // ... (the rest of the Yahoo Finance code stays exactly the same!)
         const trades = result.rows;
 
         if (trades.length === 0) return res.json([]);
@@ -123,14 +141,17 @@ app.get('/api/investments', async (req, res) => {
 });
 
 // --- DEPLOY CAPITAL: SAVE NEW TRADE ---
-app.post('/api/investments', async (req, res) => {
+// 🛠️ CHANGE: Added 'auth' middleware here 👇
+app.post('/api/investments', auth, async (req, res) => {
     try {
-        const { user_id, asset_symbol, entry_price, quantity } = req.body;
+        // 🛠️ CHANGE: Pull user_id from token (req.user.id), not the body
+        const user_id = req.user.id;
+        const { asset_symbol, entry_price, quantity } = req.body;
         
-        // IMPROVEMENT 3: Strict Input Validation
-        if (!user_id || !asset_symbol || entry_price === undefined || quantity === undefined) {
+        if (!asset_symbol || entry_price === undefined || quantity === undefined) {
             return res.status(400).json({ error: "Missing required investment parameters." });
         }
+        // ... (the rest of the code stays exactly the same!)
         if (isNaN(entry_price) || isNaN(quantity) || entry_price < 0 || quantity <= 0) {
             return res.status(400).json({ error: "Price and quantity must be valid positive numbers." });
         }

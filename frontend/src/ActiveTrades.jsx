@@ -4,20 +4,57 @@ import { motion } from 'framer-motion';
 const ActiveTrades = () => {
   const [trades, setTrades] = useState([]);
   const [isAdding, setIsAdding] = useState(false);
-  
-  // New States for dynamic asset forms
-  const [assetType, setAssetType] = useState('STOCK'); // 'STOCK' or 'GOLD'
+  const [assetType, setAssetType] = useState('STOCK'); 
   const [newTrade, setNewTrade] = useState({ ticker: '', buy_price: '', quantity: '', total_amount: '' });
   const [isLoading, setIsLoading] = useState(true);
+  
+  // NEW: Track if we have our VIP pass yet
+  const [isAuthReady, setIsAuthReady] = useState(false);
 
-  const fetchTrades = async () => {
+  // BASE URL (Change to http://localhost:5000 if testing locally)
+  // Change this:
+// const API_URL = 'https://legacy-ledger.onrender.com/api';
+
+// To this:
+const API_URL = 'http://localhost:5000/api';
+
+  // --- 1. SILENT DEMO LOGIN ---
+  const loginDemoUser = async () => {
     try {
-      // 🛠️ USE THIS FOR LOCAL TESTING:
-      const res = await fetch('http://localhost:5000/api/investments?user_id=1');
-      
-      // 🌐 WHEN YOU DEPLOY, SWAP IT BACK TO THIS:
-      // const res = await fetch('https://legacy-ledger.onrender.com/api/investments?user_id=1');
+      const res = await fetch(`${API_URL}/auth/demo`, { method: 'POST' });
+      if (res.ok) {
+        const data = await res.json();
+        localStorage.setItem('token', data.token); // Save the JWT
+        setIsAuthReady(true);
+      } else {
+        console.error("Demo login failed");
+      }
+    } catch (error) {
+      console.error("Auth server unreachable:", error);
+    }
+  };
 
+  // Run login on first load
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      loginDemoUser();
+    } else {
+      setIsAuthReady(true);
+    }
+  }, []);
+
+  // --- 2. FETCH TRADES (NOW SECURED) ---
+  const fetchTrades = async () => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
+    try {
+      // REMOVED ?user_id=1, ADDED Authorization Header
+      const res = await fetch(`${API_URL}/investments`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
       if (res.ok) {
         const data = await res.json();
         setTrades(data);
@@ -29,24 +66,29 @@ const ActiveTrades = () => {
     }
   };
 
+  // Only fetch data AFTER auth is ready
   useEffect(() => {
-    fetchTrades();
-    const interval = setInterval(fetchTrades, 60000);
-    return () => clearInterval(interval);
-  }, []);
+    if (isAuthReady) {
+      fetchTrades();
+      const interval = setInterval(fetchTrades, 60000);
+      return () => clearInterval(interval);
+    }
+  }, [isAuthReady]);
 
   const toggleAssetType = (type) => {
     setAssetType(type);
     setNewTrade({ ticker: '', buy_price: '', quantity: '', total_amount: '' });
   };
 
+  // --- 3. ADD TRADE (NOW SECURED) ---
   const handleAddTrade = async (e) => {
     e.preventDefault();
+    const token = localStorage.getItem('token');
+    
     try {
       let submitTicker = newTrade.ticker;
       let submitQuantity = parseFloat(newTrade.quantity);
 
-      // The Custom Math Engine for Digital Gold
       if (assetType === 'GOLD') {
         submitTicker = 'DIGITALGOLD';
         const totalAmount = parseFloat(newTrade.total_amount);
@@ -54,11 +96,14 @@ const ActiveTrades = () => {
         submitQuantity = totalAmount / buyRate; 
       }
 
-      const res = await fetch('https://legacy-ledger.onrender.com/api/investments', {
+      const res = await fetch(`${API_URL}/investments`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}` // Show VIP pass
+        },
         body: JSON.stringify({
-          user_id: 1,
+          // REMOVED user_id (Backend extracts it from the token!)
           asset_symbol: submitTicker,
           entry_price: parseFloat(newTrade.buy_price),
           quantity: submitQuantity
@@ -70,18 +115,22 @@ const ActiveTrades = () => {
         setIsAdding(false);
         fetchTrades(); 
       } else {
-        alert("Server failed to save the investment.");
+        alert("Server rejected the investment.");
       }
     } catch (error) {
       alert("Lost connection to server.");
     }
   };
 
+  // --- 4. DELETE TRADE (NOW SECURED) ---
   const handleDeleteTrade = async (id) => {
     if (!window.confirm("Liquidate this asset?")) return;
+    const token = localStorage.getItem('token');
+    
     try {
-      const res = await fetch(`https://legacy-ledger.onrender.com/api/investments/${id}`, {
-        method: 'DELETE'
+      const res = await fetch(`${API_URL}/investments/${id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` } // Show VIP pass
       });
       if (res.ok) {
         setTrades(trades.filter(t => t.id !== id));
@@ -138,7 +187,6 @@ const ActiveTrades = () => {
       {isAdding && (
         <motion.form initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} onSubmit={handleAddTrade} style={{ backgroundColor: '#2d2d2d', padding: '20px', borderRadius: '10px', marginBottom: '25px', border: '1px solid #444', display: 'flex', gap: '15px', flexDirection: 'column' }}>
           
-          {/* Mode Toggle */}
           <div style={{ display: 'flex', gap: '10px', width: '100%' }}>
             <button type="button" onClick={() => toggleAssetType('STOCK')} style={{ flex: 1, padding: '10px', backgroundColor: assetType === 'STOCK' ? '#60a5fa' : '#333', color: assetType === 'STOCK' ? '#121212' : '#fff', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', transition: '0.2s' }}>📈 Indian Stocks</button>
             <button type="button" onClick={() => toggleAssetType('GOLD')} style={{ flex: 1, padding: '10px', backgroundColor: assetType === 'GOLD' ? '#facc15' : '#333', color: assetType === 'GOLD' ? '#121212' : '#fff', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', transition: '0.2s' }}>🪙 Digital Gold</button>
