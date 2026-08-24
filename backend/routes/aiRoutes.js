@@ -36,7 +36,7 @@ async function generateAIContent(prompt, isJsonResponse = false) {
                 }
             ],
             // 👇 THIS IS THE ONLY LINE THAT CHANGED 👇
-            model: "llama3-8b-8192" 
+            model: process.env.GROQ_MODEL || "mixtral-8x7b-32768" 
         };
 
         if (isJsonResponse) {
