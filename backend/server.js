@@ -223,6 +223,11 @@ app.get('/', (req, res) => {
     res.send('Legacy Ledger API is running!');
 });
 
-app.listen(PORT, () => {
-    console.log(`🚀 Server is running on port ${PORT}`);
-});
+// --- CONDITIONAL EXPORT FOR AUTOMATED TESTING ---
+if (process.env.NODE_ENV !== 'test') {
+    app.listen(PORT, () => {
+        console.log(`🚀 Server is running on port ${PORT}`);
+    });
+}
+
+module.exports = app;
