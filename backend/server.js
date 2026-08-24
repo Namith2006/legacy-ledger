@@ -6,6 +6,7 @@ const rateLimit = require('express-rate-limit'); // ⏱️ NEW: Rate limiting
 const db = require('./db');
 
 const app = express();
+app.set('trust proxy', 1);
 const PORT = process.env.PORT || 5000;
 
 // The "Fake ID" to get past Yahoo's bot blockers
