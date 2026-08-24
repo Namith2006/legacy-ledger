@@ -35,7 +35,8 @@ async function generateAIContent(prompt, isJsonResponse = false) {
                     content: prompt
                 }
             ],
-            model: "llama-3.1-8b-instant"
+            // 👇 THIS IS THE ONLY LINE THAT CHANGED 👇
+            model: "llama3-8b-8192" 
         };
 
         if (isJsonResponse) {
