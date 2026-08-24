@@ -16,7 +16,7 @@ const ActiveTrades = () => {
 // const API_URL = 'https://legacy-ledger.onrender.com/api';
 
 // To this:
-const API_URL = 'http://localhost:5000/api';
+const API_URL = 'https://legacy-ledger.onrender.com/api';
 
   // --- 1. SILENT DEMO LOGIN ---
   const loginDemoUser = async () => {
