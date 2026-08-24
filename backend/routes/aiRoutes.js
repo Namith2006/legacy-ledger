@@ -15,7 +15,12 @@ const YAHOO_HEADERS = {
 };
 
 // --- SINGLE-CORE ENGINE: GROQ EXCLUSIVE ---
+// --- SINGLE-CORE ENGINE: GROQ EXCLUSIVE ---
 async function generateAIContent(prompt, isJsonResponse = false) {
+    // 1. Create the AbortController and a 20-second countdown timer
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 20000); // 20_000 ms = 20 seconds
+
     try {
         const options = {
             messages: [
@@ -37,10 +42,27 @@ async function generateAIContent(prompt, isJsonResponse = false) {
             options.response_format = { type: "json_object" };
         }
 
-        const chatCompletion = await groq.chat.completions.create(options);
+        // 2. Attach the abort signal to the Groq request
+        const chatCompletion = await groq.chat.completions.create(options, { 
+            signal: controller.signal 
+        });
+        
+        // 3. If Groq answers in time, cancel the self-destruct timer!
+        clearTimeout(timeout);
+        
         return chatCompletion.choices[0].message.content;
         
     } catch (groqError) {
+        // Ensure the timer is cleared even if an error occurs
+        clearTimeout(timeout); 
+
+        // 4. Handle the specific Timeout Error
+        if (groqError.name === 'AbortError') {
+            console.error("❌ Groq engine timeout: Request took longer than 20 seconds.");
+            throw new Error("AI is currently overloaded and timed out. Please try again.");
+        }
+
+        // Handle normal Groq API errors
         console.error(`❌ Groq engine failed: ${groqError.message}`);
         throw new Error("AI engine is currently down. Please try again later.");
     }
