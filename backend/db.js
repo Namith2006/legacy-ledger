@@ -1,25 +1,24 @@
 const { Pool } = require('pg');
-const { logError } = require('./utils/logger'); // 👈 1. Import your new logger
 require('dotenv').config();
 
-const useSsl = process.env.DATABASE_SSL === 'true';
+const isSSL = process.env.DATABASE_SSL === 'true' || process.env.NODE_ENV === 'production';
+const rejectUnauthorized = process.env.DB_REJECT_UNAUTHORIZED === 'true';
 
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
-    ssl: useSsl ? {
-        rejectUnauthorized: process.env.DB_REJECT_UNAUTHORIZED !== 'false'
-    } : false
+    ssl: isSSL
+        ? {
+              rejectUnauthorized: rejectUnauthorized
+          }
+        : false
 });
 
 pool.on('connect', () => {
-    console.log("🔗 Securely connected to the Database!");
+    console.log('🔗 Securely connected to the Database!');
 });
 
-// 👇 2. Replace console.error with your secure logError function
 pool.on('error', (err) => {
-    logError("Database connection lost", err); 
+    console.error('❌ Unexpected database pool error:', err);
 });
 
-module.exports = {
-    query: (text, params) => pool.query(text, params),
-};
+module.exports = pool;

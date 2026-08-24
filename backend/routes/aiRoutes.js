@@ -15,7 +15,6 @@ const YAHOO_HEADERS = {
 };
 
 // --- SINGLE-CORE ENGINE: GROQ EXCLUSIVE ---
-// --- SINGLE-CORE ENGINE: GROQ EXCLUSIVE ---
 async function generateAIContent(prompt, isJsonResponse = false) {
     // 1. Create the AbortController and a 20-second countdown timer
     const controller = new AbortController();
@@ -35,8 +34,8 @@ async function generateAIContent(prompt, isJsonResponse = false) {
                     content: prompt
                 }
             ],
-            // 👇 THIS IS THE ONLY LINE THAT CHANGED 👇
-            model: process.env.GROQ_MODEL || "mixtral-8x7b-32768" 
+            // 👇 THIS IS THE CRITICAL FIX: The fallback is now the stable, unrestricted open-source model.
+            model: process.env.GROQ_MODEL || "openai/gpt-oss-20b" 
         };
 
         if (isJsonResponse) {
@@ -142,7 +141,7 @@ router.post('/smart-entry', async (req, res) => {
 
         const rawAiText = await generateAIContent(prompt, true);
         
-        // --- IMPROVEMENT 1: ROBUST PARSING & FALLBACK ---
+        // --- ROBUST PARSING & FALLBACK ---
         const clean = rawAiText.replace(/```json/gi, '').replace(/```/gi, '').trim();
         let parsedData;
         
@@ -273,7 +272,7 @@ router.post('/discover', async (req, res) => {
 
         const rawAiText = await generateAIContent(prompt, true);
         
-        // --- IMPROVEMENT 2: ROBUST PARSING & FALLBACK FOR ARRAYS ---
+        // --- ROBUST PARSING & FALLBACK FOR ARRAYS ---
         const clean = rawAiText.replace(/```json/gi, '').replace(/```/gi, '').trim();
         let parsed;
         
