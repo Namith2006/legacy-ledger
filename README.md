@@ -20,3 +20,6 @@ A full-stack, AI-powered personal wealth and goal management application. Legacy
    ```bash
    git clone [https://github.com/Namith2006/legacy-ledger.git](https://github.com/Namith2006/legacy-ledger.git)
    cd legacy-ledger
+## ⚖️ Third-Party Licensing & Terms of Use
+* **AI Models:** Using Meta Llama models via Groq requires accepting the [Meta Llama 3 Community License](https://llama.meta.com/llama3/license/).
+* **Market Feeds:** Market quotes are provided for personal educational/informational use via Yahoo Finance and TwelveData APIs.
