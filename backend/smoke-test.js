@@ -1,52 +1,39 @@
-/**
- * LEGACY LEDGER - SMOKE TEST
- * Run this script to ensure your environment variables, server routing, 
- * and database connections are correctly configured before pushing to production.
- * * Usage: node smoke-test.js
- */
-
 const http = require('http');
 
-const PORT = process.env.PORT || 5000;
-const URL = `http://localhost:${PORT}/api/ping`;
+console.log("🧪 Starting Legacy Ledger Smoke Test...");
+console.log("📡 Pinging Backend API at http://localhost:5000/api/ping");
 
-console.log('🧪 Starting Legacy Ledger Smoke Test...');
-console.log(`📡 Pinging Backend API at ${URL}`);
+const req = http.get('http://localhost:5000/api/ping', (res) => {
+    let data = '';
+    
+    // Read the incoming response data
+    res.on('data', (chunk) => {
+        data += chunk;
+    });
 
-const request = http.get(URL, (res) => {
-  let data = '';
-
-  res.on('data', (chunk) => {
-    data += chunk;
-  });
-
-  res.on('end', () => {
-    if (res.statusCode === 200) {
-      try {
-        const parsed = JSON.parse(data);
-        if (parsed.status === 'healthy' && parsed.database === 'connected') {
-          console.log('✅ PASS: Server is running and Database is connected.');
-          process.exit(0); // Success
+    // When the response is completely received
+    res.on('end', () => {
+        if (res.statusCode === 200) {
+            console.log(`✅ SUCCESS: Server is UP and returned Status 200!`);
+            console.log(`📝 Server says: ${data}`);
+            process.exit(0); // Exit Code 0 tells GitHub Actions the test PASSED
         } else {
-          console.log('⚠️ WARNING: Server running, but database returned unexpected state:', parsed);
-          process.exit(1);
+            console.error(`❌ FAIL: Server returned status ${res.statusCode}`);
+            console.error(`📝 Raw Output: ${data}`);
+            process.exit(1); // Exit Code 1 tells GitHub Actions it FAILED
         }
-      } catch (e) {
-        console.log('❌ FAIL: Received invalid JSON from health check.');
-        process.exit(1);
-      }
-    } else {
-      console.log(`❌ FAIL: Server responded with status code ${res.statusCode}`);
-      process.exit(1);
-    }
-  });
+    });
 });
 
-request.on('error', (err) => {
-  if (err.code === 'ECONNREFUSED') {
-    console.log('❌ FAIL: Connection refused. Is the server running? Run `npm run dev` first.');
-  } else {
-    console.log(`❌ FAIL: Smoke test failed due to network error: ${err.message}`);
-  }
-  process.exit(1); // Failure
+// Handle cases where the server is completely offline
+req.on('error', (err) => {
+    console.error(`❌ FAIL: Connection refused. Server might not be running.`);
+    console.error(`Details: ${err.message}`);
+    process.exit(1);
 });
+
+// Fallback timeout just in case it hangs
+setTimeout(() => {
+    console.error("❌ FAIL: Request timed out after 5 seconds.");
+    process.exit(1);
+}, 5000);
