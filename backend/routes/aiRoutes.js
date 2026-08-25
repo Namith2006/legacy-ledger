@@ -5,6 +5,8 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db');
 const Groq = require('groq-sdk');
+// 👇 IMPORT YOUR NEW HELPER
+const { safeParseWithSchema } = require('../utils/safeAiParse');
 
 // Initialize Groq SDK
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
@@ -98,7 +100,7 @@ router.post('/analyze/:userId', async (req, res) => {
         
         const aiAdvice = await generateAIContent(prompt, false);
         
-        // --- ZOD VALIDATION ---
+        // --- ZOD VALIDATION (Text Only) ---
         const analyzeSchema = z.string().min(10, "AI response was too short or empty.");
         const validation = analyzeSchema.safeParse(aiAdvice);
 
@@ -153,27 +155,7 @@ router.post('/smart-entry', async (req, res) => {
 
         const rawAiText = await generateAIContent(prompt, true);
         
-        // --- ROBUST PARSING & FALLBACK ---
-        const clean = rawAiText.replace(/```json/gi, '').replace(/```/gi, '').trim();
-        let parsedData;
-        
-        try {
-            parsedData = JSON.parse(clean);
-        } catch (e) {
-            // Fallback: attempt to extract JSON-like substring
-            const jsonMatch = clean.match(/(\{[\s\S]*\})/m);
-            if (jsonMatch) {
-                try {
-                    parsedData = JSON.parse(jsonMatch[0]);
-                } catch (nestedErr) {
-                    return res.status(422).json({ error: 'AI returned invalid JSON format', rawOutput: rawAiText });
-                }
-            } else {
-                return res.status(422).json({ error: 'AI returned invalid JSON format', rawOutput: rawAiText });
-            }
-        }
-
-        // --- ZOD VALIDATION ---
+        // --- NEW: ZOD VALIDATION INTEGRATION ---
         const smartEntrySchema = z.object({
             type: z.string().transform(v => v.toLowerCase()).pipe(z.enum(['income', 'expense'])),
             amount: z.number(),
@@ -181,16 +163,17 @@ router.post('/smart-entry', async (req, res) => {
             description: z.string()
         });
 
-        const validation = smartEntrySchema.safeParse(parsedData);
-        if (!validation.success) {
+        const result = safeParseWithSchema(rawAiText, smartEntrySchema);
+
+        if (!result.success) {
             return res.status(422).json({ 
-                error: 'AI output failed schema validation', 
-                rawOutput: rawAiText, 
-                details: validation.error.issues 
+                error: result.error, 
+                rawOutput: result.rawOutput, 
+                details: result.details 
             });
         }
 
-        res.json({ message: "Smart extraction successful", data: validation.data });
+        res.json({ message: "Smart extraction successful", data: result.data });
     } catch (err) {
         console.error("Smart Entry Error:", err.message);
         res.status(500).json({ message: "Failed to parse transaction" });
@@ -296,61 +279,22 @@ router.post('/discover', async (req, res) => {
 
         const rawAiText = await generateAIContent(prompt, true);
         
-        // --- ROBUST PARSING & FALLBACK FOR ARRAYS ---
-        const clean = rawAiText.replace(/```json/gi, '').replace(/```/gi, '').trim();
-        let parsed;
-        
-        try {
-            parsed = JSON.parse(clean);
-        } catch (e) {
-            // Fallback: attempt to extract JSON-like substring (object or array)
-            const jsonMatch = clean.match(/(\{[\s\S]*\})|(\[[\s\S]*\])/m);
-            if (jsonMatch) {
-                try {
-                    parsed = JSON.parse(jsonMatch[0]);
-                } catch (nestedErr) {
-                    return res.status(422).json({ error: 'AI returned invalid JSON format', rawOutput: rawAiText });
-                }
-            } else {
-                // Secondary fallback if it just lists strings in quotes
-                const matches = rawAiText.match(/"([^"]+)"/g);
-                if (matches) {
-                    parsed = matches.map(m => m.replace(/"/g, ''));
-                } else {
-                    return res.status(422).json({ error: 'AI returned invalid JSON format', rawOutput: rawAiText });
-                }
-            }
-        }
+        // --- NEW: ZOD VALIDATION INTEGRATION ---
+        const discoverSchema = z.object({
+            tickers: z.array(z.string()).min(1)
+        });
 
-        let tickers = [];
-        
-        if (Array.isArray(parsed)) {
-            tickers = parsed;
-        } else if (parsed && Array.isArray(parsed.tickers)) {
-            tickers = parsed.tickers;
-        } else if (typeof parsed === 'object' && parsed !== null) {
-            const keys = Object.keys(parsed);
-            for (let key of keys) {
-                if (Array.isArray(parsed[key])) {
-                    tickers = parsed[key];
-                    break;
-                }
-            }
-        }
+        const result = safeParseWithSchema(rawAiText, discoverSchema);
 
-        // --- ZOD VALIDATION ---
-        const discoverSchema = z.array(z.string()).min(1);
-        
-        const validation = discoverSchema.safeParse(tickers);
-        if (!validation.success) {
+        if (!result.success) {
             return res.status(422).json({ 
-                error: 'AI output failed schema validation', 
-                rawOutput: rawAiText,
-                details: validation.error.issues
+                error: result.error, 
+                rawOutput: result.rawOutput,
+                details: result.details
             });
         }
         
-        tickers = validation.data;
+        const tickers = result.data.tickers;
 
         const recommendations = [];
         

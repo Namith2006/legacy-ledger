@@ -1,11 +1,17 @@
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
-const helmet = require('helmet'); // 🛡️ NEW: Secures HTTP headers
-const rateLimit = require('express-rate-limit'); // ⏱️ NEW: Rate limiting
+const helmet = require('helmet'); 
+const rateLimit = require('express-rate-limit'); 
 const db = require('./db');
 
 const app = express();
+// --- MONITORING (Item 7) ---
+const Sentry = require('@sentry/node');
+if (process.env.NODE_ENV === 'production' && process.env.SENTRY_DSN) {
+    Sentry.init({ dsn: process.env.SENTRY_DSN });
+}
 app.set('trust proxy', 1);
 const PORT = process.env.PORT || 5000;
 
@@ -20,7 +26,7 @@ app.use(helmet()); // Protects against common web vulnerabilities
 
 // Secure CORS configuration
 app.use(cors({ 
-    origin: process.env.CORS_ORIGIN || '*' // Allows your frontend, blocks unknown sites
+    origin: process.env.CORS_ORIGIN || '*' 
 }));
 
 app.use(express.json());
@@ -39,23 +45,31 @@ const strictApiLimiter = rateLimit({
     message: { error: "API limit reached to prevent abuse. Please wait 15 minutes." }
 });
 
-// --- SOFT JWT AUTHENTICATION MIDDLEWARE ---
-// 👇 THIS IS THE FIX: It no longer throws 401 errors. It defaults to User ID 1.
+// --- STRICT JWT AUTHENTICATION MIDDLEWARE ---
 const auth = (req, res, next) => {
     const authHeader = req.headers.authorization;
     const token = authHeader && authHeader.split(' ')[1];
     
+    // Check if we are allowed to use the demo fallback
+    const DEMO_MODE = process.env.DEMO_MODE === 'true' && process.env.NODE_ENV !== 'production';
+    
     if (!token) {
-        req.user = { id: 1, name: 'demo' }; // Fallback instead of crash
-        return next();
+        if (DEMO_MODE) {
+            req.user = { id: 1, name: 'demo' };
+            return next();
+        }
+        return res.status(401).json({ message: 'Missing Authorization' });
     }
     
     try {
         req.user = jwt.verify(token, process.env.JWT_SECRET);
         next();
     } catch (err) {
-        req.user = { id: 1, name: 'demo' }; // Fallback instead of crash
-        next();
+        if (DEMO_MODE) {
+            req.user = { id: 1, name: 'demo' };
+            return next();
+        }
+        return res.status(401).json({ message: 'Invalid token' });
     }
 };
 
