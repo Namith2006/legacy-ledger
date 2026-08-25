@@ -31,16 +31,15 @@ jobs:
           JWT_SECRET: test_jwt_secret_key_ci
           GROQ_MODEL: openai/gpt-oss-20b
           DATABASE_URL: postgresql://dummy:dummy@localhost:5432/dummy
-          # 👇 The missing piece: A fake key so Groq doesn't crash the boot sequence!
           GROQ_API_KEY: dummy_groq_api_key_for_ci_testing
         run: |
           cd backend
           
-          # Start the server in the background
+          # Start the server in the background so it can receive the ping
           NODE_ENV=development node server.js &
           
           # Wait 3 seconds for the server to fully boot up
           sleep 3
           
-          # Run your smoke test
+          # Run the actual smoke test
           npm run test
