@@ -230,7 +230,7 @@ app.delete('/api/investments/:id', auth, async (req, res) => {
 
 // --- KEEP-AWAKE PING ROUTE ---
 app.get('/api/ping', (req, res) => {
-    res.status(200).send("Legacy Ledger Backend is awake!");
+    res.status(200).json({ message: "Legacy Ledger Backend is awake!" });
 });
 
 app.get('/', (req, res) => {
