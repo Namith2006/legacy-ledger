@@ -1,3 +1,4 @@
+const { z } = require('zod');
 require('dotenv').config();
 
 const express = require('express');
@@ -34,7 +35,7 @@ async function generateAIContent(prompt, isJsonResponse = false) {
                     content: prompt
                 }
             ],
-            // 👇 THIS IS THE CRITICAL FIX: The fallback is now the stable, unrestricted open-source model.
+            // The fallback is now the stable, unrestricted open-source model.
             model: process.env.GROQ_MODEL || "openai/gpt-oss-20b" 
         };
 
@@ -96,10 +97,21 @@ router.post('/analyze/:userId', async (req, res) => {
         `;
         
         const aiAdvice = await generateAIContent(prompt, false);
+        
+        // --- ZOD VALIDATION ---
+        const analyzeSchema = z.string().min(10, "AI response was too short or empty.");
+        const validation = analyzeSchema.safeParse(aiAdvice);
+
+        if (!validation.success) {
+            return res.status(422).json({ 
+                error: 'AI output failed schema validation', 
+                rawOutput: aiAdvice 
+            });
+        }
 
         const savedLog = await db.query(
             "INSERT INTO ai_strategy_logs (user_id, ai_response) VALUES ($1, $2) RETURNING *",
-            [userId, aiAdvice]
+            [userId, validation.data]
         );
 
         res.json({ message: "Analysis Complete", strategy: savedLog.rows[0] });
@@ -161,12 +173,24 @@ router.post('/smart-entry', async (req, res) => {
             }
         }
 
-        // Validate shape manually
-        if (!parsedData || typeof parsedData !== 'object' || Array.isArray(parsedData)) {
-            return res.status(422).json({ error: 'Parsed output invalid shape', rawOutput: rawAiText });
+        // --- ZOD VALIDATION ---
+        const smartEntrySchema = z.object({
+            type: z.string().transform(v => v.toLowerCase()).pipe(z.enum(['income', 'expense'])),
+            amount: z.number(),
+            category: z.string(),
+            description: z.string()
+        });
+
+        const validation = smartEntrySchema.safeParse(parsedData);
+        if (!validation.success) {
+            return res.status(422).json({ 
+                error: 'AI output failed schema validation', 
+                rawOutput: rawAiText, 
+                details: validation.error.issues 
+            });
         }
 
-        res.json({ message: "Smart extraction successful", data: parsedData });
+        res.json({ message: "Smart extraction successful", data: validation.data });
     } catch (err) {
         console.error("Smart Entry Error:", err.message);
         res.status(500).json({ message: "Failed to parse transaction" });
@@ -298,11 +322,6 @@ router.post('/discover', async (req, res) => {
             }
         }
 
-        // Validate shape manually
-        if (!parsed || typeof parsed !== 'object') {
-            return res.status(422).json({ error: 'Parsed output invalid shape', rawOutput: rawAiText });
-        }
-
         let tickers = [];
         
         if (Array.isArray(parsed)) {
@@ -319,9 +338,19 @@ router.post('/discover', async (req, res) => {
             }
         }
 
-        if (!Array.isArray(tickers) || tickers.length === 0) {
-            tickers = ["TCS", "INFY", "RELIANCE"];
+        // --- ZOD VALIDATION ---
+        const discoverSchema = z.array(z.string()).min(1);
+        
+        const validation = discoverSchema.safeParse(tickers);
+        if (!validation.success) {
+            return res.status(422).json({ 
+                error: 'AI output failed schema validation', 
+                rawOutput: rawAiText,
+                details: validation.error.issues
+            });
         }
+        
+        tickers = validation.data;
 
         const recommendations = [];
         
