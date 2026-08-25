@@ -1,4 +1,4 @@
- const http = require('http');
+const http = require('http');
 
 console.log("🧪 Starting Legacy Ledger Smoke Test...");
 console.log("📡 Pinging Backend API at http://localhost:5000/api/ping");
