@@ -8,7 +8,7 @@
 const http = require('http');
 
 const PORT = process.env.PORT || 5000;
-const URL = `http://localhost:${PORT}/api/health`;
+const URL = `http://localhost:${PORT}/api/ping`;
 
 console.log('🧪 Starting Legacy Ledger Smoke Test...');
 console.log(`📡 Pinging Backend API at ${URL}`);

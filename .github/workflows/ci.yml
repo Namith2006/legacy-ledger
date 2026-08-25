@@ -28,9 +28,18 @@ jobs:
 
       - name: Run Smoke Tests
         env:
-          NODE_ENV: test
           JWT_SECRET: test_jwt_secret_key_ci
           GROQ_MODEL: openai/gpt-oss-20b
+          # Add a dummy database URL so the server doesn't crash on boot!
+          DATABASE_URL: postgresql://dummy:dummy@localhost:5432/dummy
         run: |
           cd backend
+          
+          # 1. Start the server in the background (&) using development mode so it opens the port
+          NODE_ENV=development node server.js &
+          
+          # 2. Wait 3 seconds for the server to fully boot up
+          sleep 3
+          
+          # 3. Run your smoke test
           npm run test
