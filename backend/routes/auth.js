@@ -1,53 +1,95 @@
 const express = require('express');
 const router = express.Router();
+const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const db = require('../db');
 
-// POST /api/auth/demo
-router.post('/demo', (req, res) => {
-    const demoUser = { id: 1, name: 'demo' };
-    const secret = process.env.JWT_SECRET || 'legacy_ledger_secret_key';
-    const token = jwt.sign(demoUser, secret, { expiresIn: '7d' });
-    res.json({ success: true, token, user: demoUser });
+// --- 1. REGISTER NEW USER ---
+router.post('/register', async (req, res) => {
+    try {
+        const { email, password } = req.body;
+
+        if (!email || !password) {
+            return res.status(400).json({ message: "Email and password are required." });
+        }
+
+        // Check if user already exists
+        const userCheck = await db.query("SELECT * FROM users WHERE email = $1", [email]);
+        if (userCheck.rows.length > 0) {
+            return res.status(409).json({ message: "User already exists with this email." });
+        }
+
+        // Hash the password (cost factor 10 is standard for SaaS)
+        const salt = await bcrypt.genSalt(10);
+        const passwordHash = await bcrypt.hash(password, salt);
+
+        // Insert into database
+        const newUser = await db.query(
+            "INSERT INTO users (email, password_hash) VALUES ($1, $2) RETURNING id, email",
+            [email, passwordHash]
+        );
+
+        // Generate their JWT
+        const token = jwt.sign(
+            { id: newUser.rows[0].id, email: newUser.rows[0].email },
+            process.env.JWT_SECRET,
+            { expiresIn: '24h' }
+        );
+
+        res.status(201).json({ 
+            message: "Registration successful", 
+            token, 
+            user: newUser.rows[0] 
+        });
+
+    } catch (err) {
+        console.error("Registration Error:", err.message);
+        res.status(500).json({ message: "Server error during registration." });
+    }
 });
 
-// POST /api/auth/update-token
-// Forces a refresh or instructs the client to synchronize local storage
-router.post('/update-token', (req, res) => {
-    const authHeader = req.headers.authorization;
-    const token = authHeader && authHeader.split(' ')[1];
-    const secret = process.env.JWT_SECRET || 'legacy_ledger_secret_key';
-
-    if (!token) {
-        const demoUser = { id: 1, name: 'demo' };
-        const newToken = jwt.sign(demoUser, secret, { expiresIn: '7d' });
-        return res.json({
-            action: 'RESET_TOKEN',
-            message: 'Issued clean guest token.',
-            token: newToken,
-            user: demoUser
-        });
-    }
-
+// --- 2. LOGIN EXISTING USER ---
+router.post('/login', async (req, res) => {
     try {
-        const decoded = jwt.verify(token, secret);
-        // Refresh valid token for another 7 days
-        const refreshedToken = jwt.sign({ id: decoded.id, name: decoded.name }, secret, { expiresIn: '7d' });
-        return res.json({
-            action: 'TOKEN_REFRESHED',
-            token: refreshedToken,
-            user: { id: decoded.id, name: decoded.name }
-        });
+        const { email, password } = req.body;
+
+        // Find user by email
+        const userResult = await db.query("SELECT * FROM users WHERE email = $1", [email]);
+        if (userResult.rows.length === 0) {
+            return res.status(401).json({ message: "Invalid credentials." });
+        }
+
+        const user = userResult.rows[0];
+
+        // Compare submitted password with the database hash
+        const validPassword = await bcrypt.compare(password, user.password_hash);
+        if (!validPassword) {
+            return res.status(401).json({ message: "Invalid credentials." });
+        }
+
+        // Issue token
+        const token = jwt.sign(
+            { id: user.id, email: user.email },
+            process.env.JWT_SECRET,
+            { expiresIn: '24h' }
+        );
+
+        res.json({ message: "Login successful", token });
+
     } catch (err) {
-        // Invalid or expired token: issue fresh token and flag reset
-        const fallbackUser = { id: 1, name: 'demo' };
-        const freshToken = jwt.sign(fallbackUser, secret, { expiresIn: '7d' });
-        return res.status(200).json({
-            action: 'CLEAR_AND_RESET',
-            message: 'Stale token purged and replaced.',
-            token: freshToken,
-            user: fallbackUser
-        });
+        console.error("Login Error:", err.message);
+        res.status(500).json({ message: "Server error during login." });
     }
+});
+
+// --- 3. GUEST DEMO MODE (Preserved for Testing) ---
+router.post('/demo', (req, res) => {
+    const demoToken = jwt.sign(
+        { id: '00000000-0000-0000-0000-000000000000', role: 'guest' }, // Fallback UUID format
+        process.env.JWT_SECRET,
+        { expiresIn: '1h' }
+    );
+    res.json({ message: "Demo mode activated", token: demoToken });
 });
 
 module.exports = router;

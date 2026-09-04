@@ -1,11 +1,13 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
+const authenticateToken = require('../middleware/auth'); // 🔒 Import the security middleware
 
 // 1. FETCH & ENRICH ROUTE: Get trades + Live Market Prices
-router.get('/:userId', async (req, res) => {
+router.get('/', authenticateToken, async (req, res) => {
     try {
-        const { userId } = req.params;
+        const userId = req.user.id; // 🔒 Securely pulled from JWT (No longer in the URL)
+        
         const result = await db.query("SELECT * FROM active_trades WHERE user_id = $1 ORDER BY id DESC", [userId]);
         const trades = result.rows;
 
@@ -56,15 +58,17 @@ router.get('/:userId', async (req, res) => {
 });
 
 // 2. CREATE ROUTE: Deploy Capital
-router.post('/', async (req, res) => {
+router.post('/', authenticateToken, async (req, res) => {
     try {
-        const { user_id, ticker, buy_price, quantity } = req.body;
+        const userId = req.user.id; // 🔒 Securely pulled from JWT
+        const { ticker, buy_price, quantity } = req.body; // user_id removed from req.body
+        
         let cleanTicker = ticker.toUpperCase().trim();
         if (!cleanTicker.endsWith('.NS')) cleanTicker += '.NS';
 
         const newTrade = await db.query(
             "INSERT INTO active_trades (user_id, ticker, buy_price, quantity) VALUES ($1, $2, $3, $4) RETURNING *",
-            [user_id, cleanTicker, buy_price, quantity]
+            [userId, cleanTicker, buy_price, quantity]
         );
         res.status(201).json(newTrade.rows[0]);
     } catch (err) {
@@ -74,10 +78,21 @@ router.post('/', async (req, res) => {
 });
 
 // 3. DELETE ROUTE: Close Position
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', authenticateToken, async (req, res) => {
     try {
         const { id } = req.params;
-        await db.query("DELETE FROM active_trades WHERE id = $1", [id]);
+        const userId = req.user.id; // 🔒 Securely pulled from JWT
+        
+        // 🔒 Added AND user_id = $2 to prevent closing someone else's position
+        const deleteOp = await db.query(
+            "DELETE FROM active_trades WHERE id = $1 AND user_id = $2 RETURNING *", 
+            [id, userId]
+        );
+        
+        if (deleteOp.rows.length === 0) {
+            return res.status(404).json({ message: "Position not found or unauthorized to close" });
+        }
+        
         res.json({ message: "Position Closed" });
     } catch (err) {
         console.error("Delete Trade Error:", err.message);

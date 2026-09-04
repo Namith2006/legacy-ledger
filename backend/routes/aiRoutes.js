@@ -5,8 +5,8 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db');
 const Groq = require('groq-sdk');
-// 👇 IMPORT YOUR NEW HELPER
 const { safeParseWithSchema } = require('../utils/safeAiParse');
+const authenticateToken = require('../middleware/auth'); // 🔒 Import the security middleware
 
 // Initialize Groq SDK
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
@@ -72,9 +72,10 @@ async function generateAIContent(prompt, isJsonResponse = false) {
 }
 
 // 1. Route to analyze user spending
-router.post('/analyze/:userId', async (req, res) => {
+// 🔒 SECURED: Removed /:userId from the URL, added authenticateToken
+router.post('/analyze', authenticateToken, async (req, res) => {
     try {
-        const { userId } = req.params;
+        const userId = req.user.id; // 🔒 Securely pulled directly from the JWT
         const transactions = await db.query(
             "SELECT type, amount, category, description FROM transactions WHERE user_id = $1 ORDER BY date DESC LIMIT 10",
             [userId]
@@ -124,7 +125,8 @@ router.post('/analyze/:userId', async (req, res) => {
 });
 
 // 2. Route to instantly categorize a transaction (Dynamic Variable Math Engine)
-router.post('/smart-entry', async (req, res) => {
+// 🔒 SECURED: Added authenticateToken to prevent abuse of your Groq API
+router.post('/smart-entry', authenticateToken, async (req, res) => {
     try {
         const { rawText } = req.body;
         if (!rawText) return res.status(400).json({ message: "Please provide transaction text." });
@@ -181,7 +183,8 @@ router.post('/smart-entry', async (req, res) => {
 });
 
 // 3. Stoic Market Research Route 
-router.post('/research', async (req, res) => {
+// 🔒 SECURED: Added authenticateToken to prevent API abuse
+router.post('/research', authenticateToken, async (req, res) => {
     try {
         let { query, currentBalance } = req.body;
         if (!query) return res.status(400).json({ message: "Please provide a company ticker or name." });
@@ -258,7 +261,8 @@ router.post('/research', async (req, res) => {
 });
 
 // 4. Robo-Advisor Guided Discovery Route (Strict NSE Lock)
-router.post('/discover', async (req, res) => {
+// 🔒 SECURED: Added authenticateToken to prevent API abuse
+router.post('/discover', authenticateToken, async (req, res) => {
     try {
         const { horizon, risk, sector, budget, goal } = req.body;
         

@@ -4,6 +4,10 @@ import ActiveTrades from './ActiveTrades';
 import { motion } from 'framer-motion';
 import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer, Cell, LineChart, Line, YAxis } from 'recharts';
 
+// Import your new Auth Pages
+import Login from './pages/Login';
+import Register from './pages/Register';
+
 // --- 5-YEAR MOCK TREND ENGINE ---
 const generateMockHistory = (currentPrice) => {
   let price = currentPrice * 0.50; 
@@ -27,30 +31,24 @@ const StepButton = ({ label, onClick }) => (
 );
 
 function App() {
-  // --- VAULT SECURITY STATES ---
-  const [isLocked, setIsLocked] = useState(true);
-  const [pinInput, setPinInput] = useState('');
-  const [authError, setAuthError] = useState(false);
-  
-  // Upgraded: Dynamic Master PIN & Registered Anchor
-  const [masterPin, setMasterPin] = useState("250931"); 
-  const REGISTERED_MOBILE = "9019974413"; // The ONLY number allowed to reset the PIN
-  
-  // OTP Reset States
-  const [resetStep, setResetStep] = useState(0); // 0 = Login, 1 = Enter Phone, 2 = Verify OTP, 3 = New PIN
-  const [generatedOtp, setGeneratedOtp] = useState('');
-  const [otpInput, setOtpInput] = useState('');
-  const [newPinInput, setNewPinInput] = useState('');
-  const [mobileNumber, setMobileNumber] = useState('');
+  // --- AUTHENTICATION ENGINE ---
+  const token = localStorage.getItem('token');
+  const path = window.location.pathname;
+
+  // Reusable headers for all secure API calls
+  const authHeaders = {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${token}` // 🔒 Injects the JWT
+  };
+
+  // Base API URL (Update this when deploying to production!)
+  const API_URL = 'http://localhost:5000/api';
 
   // --- Standard States ---
   const [balanceData, setBalanceData] = useState(null);
   const [transactions, setTransactions] = useState([]);
   const [goals, setGoals] = useState([]);
-  
-  // State for toggling transaction view
   const [showAllTransactions, setShowAllTransactions] = useState(false);
-
   const [smartInput, setSmartInput] = useState('');
   const [isSmartLoading, setIsSmartLoading] = useState(false);
 
@@ -71,108 +69,23 @@ function App() {
   });
   const [discoveryResults, setDiscoveryResults] = useState(null);
 
-  // --- AUTHENTICATION ENGINE ---
-  const handlePinSubmit = (e) => {
-    e.preventDefault();
-    if (pinInput === masterPin) {
-      setIsLocked(false);
-      setAuthError(false);
-    } else {
-      setAuthError(true);
-      setPinInput('');
-    }
-  };
-
-  const handleBiometricUnlock = async () => {
-    // Checks if the device supports WebAuthn (Biometrics)
-    if (window.PublicKeyCredential) {
-      try {
-        // This triggers the device's native Fingerprint/FaceID prompt
-        await navigator.credentials.get({
-          publicKey: {
-            challenge: new Uint8Array(32),
-            rpId: window.location.hostname,
-            userVerification: "required",
-          }
-        });
-        setIsLocked(false);
-      } catch (err) {
-        console.log("Biometric auth failed or cancelled", err);
-        alert("Biometric verification failed. Please use PIN.");
-      }
-    } else {
-      alert("Biometrics are not supported on this device/browser.");
-    }
-  };
-
-  // --- OTP RECOVERY ENGINE ---
-  const handleForgotPin = () => {
-    setResetStep(1); // Go to the phone number input screen
-    setAuthError(false);
-  };
-
-  const handleSendOtp = (e) => {
-    e.preventDefault();
-    
-    if (mobileNumber.length !== 10) {
-      alert("⚠️ Please enter a valid 10-digit mobile number.");
-      return;
-    }
-
-    // 🛡️ SECURITY FIX: Block any number that isn't the registered owner
-    if (mobileNumber !== REGISTERED_MOBILE) {
-      alert("⛔ SECURITY ALERT: Unrecognized mobile number. Access Denied.");
-      setMobileNumber(''); // Wipe the malicious input
-      return;
-    }
-    
-    // Generate a random 6-digit OTP
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    setGeneratedOtp(otp);
-    setResetStep(2); // Move to OTP verification screen
-    
-    // Simulate an SMS notification being delivered to the entered number
-    alert(`📱 [SIMULATED SMS MESSAGE]\n\nTo: +91 ${mobileNumber}\n\nLegacy Ledger Security:\nYour One-Time Password (OTP) to reset your vault PIN is: ${otp}\n\nDo not share this code.`);
-  };
-
-  const handleVerifyOtp = (e) => {
-    e.preventDefault();
-    if (otpInput === generatedOtp) {
-      setResetStep(3); // Move to set new PIN screen
-      setOtpInput('');
-    } else {
-      alert("❌ Invalid OTP. Please try again.");
-      setOtpInput('');
-    }
-  };
-
-  const handleSetNewPin = (e) => {
-    e.preventDefault();
-    if (newPinInput.length === 6) {
-      setMasterPin(newPinInput);
-      setResetStep(0); // Return to standard lock screen
-      setNewPinInput('');
-      setMobileNumber(''); // Clear the mobile number for security
-      alert("✅ PIN successfully reset! You can now unlock your vault.");
-    } else {
-      alert("⚠️ PIN must be exactly 6 digits.");
-    }
-  };
-
   // Fetch initial dashboard data
   useEffect(() => {
+    // Only attempt to fetch data if a token exists
+    if (!token) return;
+
     const fetchData = async () => {
       try {
-        const balanceRes = await fetch('https://legacy-ledger.onrender.com/api/transactions/balance/1');
+        const balanceRes = await fetch(`${API_URL}/transactions/balance`, { headers: authHeaders });
         if (balanceRes.ok) setBalanceData(await balanceRes.json());
 
-        const transRes = await fetch('https://legacy-ledger.onrender.com/api/transactions/1');
+        const transRes = await fetch(`${API_URL}/transactions`, { headers: authHeaders });
         if (transRes.ok) {
           const data = await transRes.json();
           setTransactions(Array.isArray(data) ? data : []);
         }
 
-        const goalsRes = await fetch('https://legacy-ledger.onrender.com/api/goals/1');
+        const goalsRes = await fetch(`${API_URL}/goals`, { headers: authHeaders });
         if (goalsRes.ok) {
           const data = await goalsRes.json();
           setGoals(Array.isArray(data) ? data : []);
@@ -182,21 +95,17 @@ function App() {
       }
     };
     
-    // Only fetch data if the vault is unlocked
-    if (!isLocked) {
-      fetchData();
-    }
-  }, [isLocked]);
+    fetchData();
+  }, [token]);
 
   // --- Create New Goal Function ---
   const handleAddGoal = async (e) => {
     e.preventDefault();
     try {
-      const response = await fetch('https://legacy-ledger.onrender.com/api/goals', {
+      const response = await fetch(`${API_URL}/goals`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authHeaders,
         body: JSON.stringify({
-          user_id: 1,
           title: newGoalData.title,
           target_amount: parseFloat(newGoalData.target),
           current_amount: parseFloat(newGoalData.saved) || 0
@@ -220,8 +129,9 @@ function App() {
     if (!isConfirmed) return;
 
     try {
-      const response = await fetch(`https://legacy-ledger.onrender.com/api/goals/${goalId}`, {
+      const response = await fetch(`${API_URL}/goals/${goalId}`, {
         method: 'DELETE',
+        headers: authHeaders
       });
       
       if (response.ok) {
@@ -243,9 +153,9 @@ function App() {
     const newTotal = parseFloat(currentAmount) + parseFloat(addedFunds);
 
     try {
-      const response = await fetch(`https://legacy-ledger.onrender.com/api/goals/${goalId}`, {
+      const response = await fetch(`${API_URL}/goals/${goalId}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authHeaders,
         body: JSON.stringify({ current_amount: newTotal })
       });
       
@@ -268,9 +178,9 @@ function App() {
     setIsResearchLoading(true); 
     setResearchResult(null); 
     try { 
-      const response = await fetch('https://legacy-ledger.onrender.com/api/ai/research', { 
+      const response = await fetch(`${API_URL}/ai/research`, { 
         method: 'POST', 
-        headers: { 'Content-Type': 'application/json' }, 
+        headers: authHeaders, 
         body: JSON.stringify({ query: researchQuery, currentBalance: balanceData ? balanceData.netBalance : 0 }) 
       }); 
       const result = await response.json(); 
@@ -288,13 +198,23 @@ function App() {
     if (!smartInput) return; 
     setIsSmartLoading(true); 
     try { 
-      const aiResponse = await fetch('https://legacy-ledger.onrender.com/api/ai/smart-entry', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ rawText: smartInput }) }); 
+      const aiResponse = await fetch(`${API_URL}/ai/smart-entry`, { 
+        method: 'POST', 
+        headers: authHeaders, 
+        body: JSON.stringify({ rawText: smartInput }) 
+      }); 
       const aiResult = await aiResponse.json(); 
       const ext = aiResult.data; 
-      const saveResponse = await fetch('https://legacy-ledger.onrender.com/api/transactions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user_id: 1, type: ext.type, amount: ext.amount, category: ext.category, description: ext.description }) }); 
+      
+      const saveResponse = await fetch(`${API_URL}/transactions`, { 
+        method: 'POST', 
+        headers: authHeaders, 
+        body: JSON.stringify({ type: ext.type, amount: ext.amount, category: ext.category, description: ext.description }) 
+      }); 
+      
       if (saveResponse.ok) { 
-        fetch('https://legacy-ledger.onrender.com/api/transactions/balance/1').then(res => res.json()).then(data => setBalanceData(data)); 
-        fetch('https://legacy-ledger.onrender.com/api/transactions/1').then(res => res.json()).then(data => setTransactions(data)); 
+        fetch(`${API_URL}/transactions/balance`, { headers: authHeaders }).then(res => res.json()).then(data => setBalanceData(data)); 
+        fetch(`${API_URL}/transactions`, { headers: authHeaders }).then(res => res.json()).then(data => setTransactions(data)); 
         setSmartInput(''); 
       } 
     } catch (error) { alert("Error parsing transaction."); } 
@@ -312,9 +232,9 @@ function App() {
     setAdvisorStep(6); 
     const finalAnswers = overrideAnswers || discoveryAnswers;
     try {
-      const response = await fetch('https://legacy-ledger.onrender.com/api/ai/discover', {
+      const response = await fetch(`${API_URL}/ai/discover`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authHeaders,
         body: JSON.stringify(finalAnswers)
       });    
       const data = await response.json();
@@ -327,128 +247,39 @@ function App() {
 
   const resetAdvisor = () => { setAdvisorStep(0); setDiscoveryAnswers({ horizon: '', risk: '', sector: '', budget: '', goal: '' }); setDiscoveryResults(null); };
 
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    window.location.href = '/login';
+  };
+
   // Helper variable to dynamically decide which transactions to show
   const displayedTransactions = showAllTransactions ? transactions : transactions.slice(0, 5);
 
-  // --- THE VAULT LOCK SCREEN INTERCEPTOR ---
-  if (isLocked) {
-    return (
-      <div style={{ height: '100vh', display: 'flex', justifyContent: 'center', alignItems: 'center', backgroundColor: '#121212', fontFamily: 'sans-serif' }}>
-        <motion.div 
-          initial={{ opacity: 0, scale: 0.9 }} 
-          animate={{ opacity: 1, scale: 1 }} 
-          style={{ backgroundColor: '#1e1e1e', padding: '40px', borderRadius: '15px', textAlign: 'center', boxShadow: '0 10px 25px rgba(0,0,0,0.5)', border: '1px solid #333', maxWidth: '400px', width: '90%' }}
-        >
-          <div style={{ fontSize: '3rem', marginBottom: '10px' }}>🔒</div>
-          <h2 style={{ color: '#fff', margin: '0 0 5px 0', textTransform: 'uppercase', letterSpacing: '2px' }}>Legacy Ledger</h2>
-          <p style={{ color: '#888', marginBottom: '25px', fontSize: '0.9rem' }}>Encrypted Financial Vault</p>
-          
-          {/* STEP 0: STANDARD LOGIN */}
-          {resetStep === 0 && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-              <form onSubmit={handlePinSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-                <input 
-                  type="password" 
-                  placeholder="Enter 6-Digit PIN" 
-                  value={pinInput}
-                  onChange={(e) => setPinInput(e.target.value)}
-                  maxLength="6"
-                  style={{ padding: '15px', borderRadius: '8px', border: authError ? '1px solid #f87171' : '1px solid #444', backgroundColor: '#121212', color: '#fff', fontSize: '1.2rem', textAlign: 'center', letterSpacing: '5px' }}
-                />
-                {authError && <span style={{ color: '#f87171', fontSize: '0.85rem' }}>Incorrect PIN. Access Denied.</span>}
-                
-                <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} type="submit" style={{ padding: '15px', backgroundColor: '#4ade80', color: '#121212', fontWeight: 'bold', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '1.1rem' }}>
-                  Unlock Vault
-                </motion.button>
-              </form>
-
-              <button onClick={handleForgotPin} style={{ background: 'none', border: 'none', color: '#888', textDecoration: 'underline', marginTop: '15px', cursor: 'pointer', fontSize: '0.85rem' }}>
-                Forgot PIN?
-              </button>
-
-              <div style={{ margin: '20px 0', color: '#555', fontSize: '0.85rem' }}>OR</div>
-
-              <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={handleBiometricUnlock} style={{ width: '100%', padding: '15px', backgroundColor: '#2d2d2d', color: '#60a5fa', fontWeight: 'bold', border: '1px solid #444', borderRadius: '8px', cursor: 'pointer', fontSize: '1rem', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '10px' }}>
-                <span>👁️‍🗨️</span> Use Biometrics
-              </motion.button>
-            </motion.div>
-          )}
-
-          {/* STEP 1: ENTER MOBILE NUMBER */}
-          {resetStep === 1 && (
-            <motion.form initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} onSubmit={handleSendOtp} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-              <p style={{ color: '#60a5fa', fontSize: '0.9rem', margin: 0 }}>Enter your registered mobile number.</p>
-              
-              <div style={{ display: 'flex', alignItems: 'center', backgroundColor: '#121212', border: '1px solid #444', borderRadius: '8px', padding: '0 15px' }}>
-                <span style={{ color: '#888', fontWeight: 'bold', marginRight: '10px' }}>+91</span>
-                <input 
-                  type="tel" 
-                  placeholder="Mobile Number" 
-                  value={mobileNumber}
-                  onChange={(e) => setMobileNumber(e.target.value.replace(/\D/g, ''))}
-                  maxLength="10"
-                  style={{ flex: 1, padding: '15px 0', background: 'none', border: 'none', color: '#fff', fontSize: '1.2rem', outline: 'none', letterSpacing: '2px' }}
-                />
-              </div>
-
-              <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} type="submit" style={{ padding: '15px', backgroundColor: '#60a5fa', color: '#121212', fontWeight: 'bold', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '1.1rem' }}>
-                Send OTP
-              </motion.button>
-              <button type="button" onClick={() => { setResetStep(0); setMobileNumber(''); }} style={{ background: 'none', border: 'none', color: '#888', textDecoration: 'underline', cursor: 'pointer', fontSize: '0.85rem' }}>Cancel</button>
-            </motion.form>
-          )}
-
-          {/* STEP 2: VERIFY OTP */}
-          {resetStep === 2 && (
-            <motion.form initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} onSubmit={handleVerifyOtp} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-              <p style={{ color: '#60a5fa', fontSize: '0.9rem', margin: 0 }}>
-                An OTP was sent to +91 ******{mobileNumber.slice(-4)}
-              </p>
-              <input 
-                type="text" 
-                placeholder="Enter 6-Digit OTP" 
-                value={otpInput}
-                onChange={(e) => setOtpInput(e.target.value.replace(/\D/g, ''))}
-                maxLength="6"
-                style={{ padding: '15px', borderRadius: '8px', border: '1px solid #60a5fa', backgroundColor: '#121212', color: '#fff', fontSize: '1.2rem', textAlign: 'center', letterSpacing: '5px' }}
-              />
-              <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} type="submit" style={{ padding: '15px', backgroundColor: '#60a5fa', color: '#121212', fontWeight: 'bold', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '1.1rem' }}>
-                Verify OTP
-              </motion.button>
-              <button type="button" onClick={() => { setResetStep(0); setMobileNumber(''); setOtpInput(''); }} style={{ background: 'none', border: 'none', color: '#888', textDecoration: 'underline', cursor: 'pointer', fontSize: '0.85rem' }}>Cancel</button>
-            </motion.form>
-          )}
-
-          {/* STEP 3: SET NEW PIN */}
-          {resetStep === 3 && (
-            <motion.form initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} onSubmit={handleSetNewPin} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-              <p style={{ color: '#4ade80', fontSize: '0.9rem', margin: 0 }}>OTP Verified! Create a new PIN.</p>
-              <input 
-                type="password" 
-                placeholder="New 6-Digit PIN" 
-                value={newPinInput}
-                onChange={(e) => setNewPinInput(e.target.value)}
-                maxLength="6"
-                style={{ padding: '15px', borderRadius: '8px', border: '1px solid #4ade80', backgroundColor: '#121212', color: '#fff', fontSize: '1.2rem', textAlign: 'center', letterSpacing: '5px' }}
-              />
-              <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} type="submit" style={{ padding: '15px', backgroundColor: '#4ade80', color: '#121212', fontWeight: 'bold', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '1.1rem' }}>
-                Save New PIN
-              </motion.button>
-            </motion.form>
-          )}
-
-        </motion.div>
-      </div>
-    );
+  // --- ROUTING ENGINE ---
+  if (path === '/login') return <Login />;
+  if (path === '/register') return <Register />;
+  
+  // If no token exists and they aren't on login/register, force them to login
+  if (!token) {
+    window.location.href = '/login';
+    return null;
   }
 
-  // --- MAIN DASHBOARD (UNLOCKED) ---
+  // --- MAIN DASHBOARD (AUTHENTICATED) ---
   return (
     <div className="dashboard-container" style={{ maxWidth: '800px', margin: '0 auto', padding: '40px', fontFamily: 'sans-serif' }}>
       
-      <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }} style={{ textAlign: 'center', marginBottom: '40px' }}>
+      <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }} style={{ textAlign: 'center', marginBottom: '40px', position: 'relative' }}>
         <h1 style={{ fontSize: '2.5rem', marginBottom: '5px' }}>Legacy Ledger</h1>
         <p style={{ color: '#888' }}>Welcome to your financial dashboard!</p>
+        
+        {/* Logout Button */}
+        <button 
+          onClick={handleLogout} 
+          style={{ position: 'absolute', top: 0, right: 0, background: 'none', border: '1px solid #444', color: '#888', padding: '8px 12px', borderRadius: '8px', cursor: 'pointer' }}
+        >
+          Logout
+        </button>
       </motion.div>
 
       {/* --- MODE 1: ON-DEMAND RADAR --- */}

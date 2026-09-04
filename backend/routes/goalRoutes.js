@@ -1,11 +1,13 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
+const authenticateToken = require('../middleware/auth'); // 🔒 Import the security middleware
 
 // 1. FETCH ROUTE: Get all goals
-router.get('/:userId', async (req, res) => {
+router.get('/', authenticateToken, async (req, res) => {
     try {
-        const { userId } = req.params;
+        const userId = req.user.id; // 🔒 Securely pulled from JWT (No longer in the URL)
+        
         const result = await db.query(
             "SELECT * FROM goals WHERE user_id = $1 ORDER BY id ASC", 
             [userId]
@@ -18,13 +20,14 @@ router.get('/:userId', async (req, res) => {
 });
 
 // 2. CREATE ROUTE: Add a new goal
-router.post('/', async (req, res) => {
+router.post('/', authenticateToken, async (req, res) => {
     try {
-        const { user_id, title, target_amount, current_amount } = req.body;
+        const userId = req.user.id; // 🔒 Securely pulled from JWT
+        const { title, target_amount, current_amount } = req.body; 
         
         const newGoal = await db.query(
             "INSERT INTO goals (user_id, title, target_amount, current_amount) VALUES ($1, $2, $3, $4) RETURNING *",
-            [user_id, title, target_amount, current_amount || 0]
+            [userId, title, target_amount, current_amount || 0]
         );
         
         res.status(201).json(newGoal.rows[0]);
@@ -35,18 +38,20 @@ router.post('/', async (req, res) => {
 });
 
 // 3. UPDATE ROUTE: Add funds to a goal
-router.put('/:id', async (req, res) => {
+router.put('/:id', authenticateToken, async (req, res) => {
     try {
         const { id } = req.params;
+        const userId = req.user.id; // 🔒 Securely pulled from JWT
         const { current_amount } = req.body;
         
+        // 🔒 Added AND user_id = $3 to prevent updating someone else's goal
         const result = await db.query(
-            "UPDATE goals SET current_amount = $1 WHERE id = $2 RETURNING *",
-            [current_amount, id]
+            "UPDATE goals SET current_amount = $1 WHERE id = $2 AND user_id = $3 RETURNING *",
+            [current_amount, id, userId]
         );
         
         if (result.rows.length === 0) {
-            return res.status(404).json({ message: "Goal not found" });
+            return res.status(404).json({ message: "Goal not found or unauthorized to update" });
         }
         
         res.json(result.rows[0]);
@@ -57,16 +62,19 @@ router.put('/:id', async (req, res) => {
 });
 
 // 4. DELETE ROUTE: Remove a goal completely
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', authenticateToken, async (req, res) => {
     try {
         const { id } = req.params;
+        const userId = req.user.id; // 🔒 Securely pulled from JWT
+        
+        // 🔒 Added AND user_id = $2 to prevent deleting someone else's goal
         const result = await db.query(
-            "DELETE FROM goals WHERE id = $1 RETURNING *",
-            [id]
+            "DELETE FROM goals WHERE id = $1 AND user_id = $2 RETURNING *",
+            [id, userId]
         );
         
         if (result.rows.length === 0) {
-            return res.status(404).json({ message: "Goal not found" });
+            return res.status(404).json({ message: "Goal not found or unauthorized to delete" });
         }
         
         res.json({ message: "Goal deleted successfully" });

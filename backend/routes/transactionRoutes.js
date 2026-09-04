@@ -1,15 +1,17 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
+const authenticateToken = require('../middleware/auth');
 
 // 1. Route to log a new transaction
-router.post('/', async (req, res) => {
+router.post('/', authenticateToken, async (req, res) => {
     try {
-        const { user_id, type, amount, category, description } = req.body;
+        const userId = req.user.id; // 🔒 Securely pulled from JWT
+        const { type, amount, category, description } = req.body;
 
         const newTransaction = await db.query(
             "INSERT INTO transactions (user_id, type, amount, category, description) VALUES ($1, $2, $3, $4, $5) RETURNING *",
-            [user_id, type, amount, category, description]
+            [userId, type, amount, category, description]
         );
 
         res.status(201).json(newTransaction.rows[0]);
@@ -19,10 +21,10 @@ router.post('/', async (req, res) => {
     }
 });
 
-// 2. FETCH ROUTE: Universal Data Fetch (The Fix is Here)
-router.get('/:userId', async (req, res) => {
+// 2. FETCH ROUTE: Universal Data Fetch
+router.get('/', authenticateToken, async (req, res) => {
     try {
-        const { userId } = req.params;
+        const userId = req.user.id; // 🔒 Securely pulled from JWT
         
         // Using SELECT * ensures we get the timestamp for the War Room, 
         // AND the amount/type/description for the Cash Flow Analytics.
@@ -39,9 +41,9 @@ router.get('/:userId', async (req, res) => {
 });
 
 // 3. Route to calculate the total balance
-router.get('/balance/:userId', async (req, res) => {
+router.get('/balance', authenticateToken, async (req, res) => {
     try {
-        const { userId } = req.params;
+        const userId = req.user.id; // 🔒 Securely pulled from JWT
         const transactions = await db.query(
             "SELECT type, amount FROM transactions WHERE user_id = $1",
             [userId]
@@ -68,13 +70,19 @@ router.get('/balance/:userId', async (req, res) => {
 });
 
 // 4. Route to delete a transaction
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', authenticateToken, async (req, res) => {
     try {
         const { id } = req.params; 
-        const deleteOp = await db.query("DELETE FROM transactions WHERE id = $1 RETURNING *", [id]);
+        const userId = req.user.id; // 🔒 Securely pulled from JWT
+        
+        // 🔒 Added AND user_id = $2 to ensure users can only delete their own data
+        const deleteOp = await db.query(
+            "DELETE FROM transactions WHERE id = $1 AND user_id = $2 RETURNING *", 
+            [id, userId]
+        );
 
         if (deleteOp.rows.length === 0) {
-            return res.status(404).json({ message: "Transaction not found!" });
+            return res.status(404).json({ message: "Transaction not found or you do not have permission to delete it!" });
         }
         res.json({ message: "Transaction deleted successfully!" });
     } catch (err) {

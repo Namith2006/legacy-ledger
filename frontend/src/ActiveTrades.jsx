@@ -7,50 +7,23 @@ const ActiveTrades = () => {
   const [assetType, setAssetType] = useState('STOCK'); 
   const [newTrade, setNewTrade] = useState({ ticker: '', buy_price: '', quantity: '', total_amount: '' });
   const [isLoading, setIsLoading] = useState(true);
-  
-  // NEW: Track if we have our VIP pass yet
-  const [isAuthReady, setIsAuthReady] = useState(false);
 
-  // BASE URL (Change to http://localhost:5000 if testing locally)
-  // Change this:
-// const API_URL = 'https://legacy-ledger.onrender.com/api';
-
-// To this:
-const API_URL = 'https://legacy-ledger.onrender.com/api';
-
-  // --- 1. SILENT DEMO LOGIN ---
-  const loginDemoUser = async () => {
-    try {
-      const res = await fetch(`${API_URL}/auth/demo`, { method: 'POST' });
-      if (res.ok) {
-        const data = await res.json();
-        localStorage.setItem('token', data.token); // Save the JWT
-        setIsAuthReady(true);
-      } else {
-        console.error("Demo login failed");
-      }
-    } catch (error) {
-      console.error("Auth server unreachable:", error);
-    }
+  // 🔒 Global Authentication Check
+  const token = localStorage.getItem('token');
+  const authHeaders = {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${token}`
   };
 
-  // Run login on first load
-  useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (!token) {
-      loginDemoUser();
-    } else {
-      setIsAuthReady(true);
-    }
-  }, []);
+  // Base API URL (Set to localhost for testing, change to Render URL for production)
+  const API_URL = 'http://localhost:5000/api';
 
-  // --- 2. FETCH TRADES (NOW SECURED) ---
+  // --- 1. FETCH TRADES (SECURED) ---
   const fetchTrades = async () => {
-    const token = localStorage.getItem('token');
     if (!token) return;
 
     try {
-      // REMOVED ?user_id=1, ADDED Authorization Header
+      // Assuming your route is mounted at /investments or /trades in server.js
       const res = await fetch(`${API_URL}/investments`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -66,24 +39,22 @@ const API_URL = 'https://legacy-ledger.onrender.com/api';
     }
   };
 
-  // Only fetch data AFTER auth is ready
+  // Fetch immediately on load, then poll every 60 seconds
   useEffect(() => {
-    if (isAuthReady) {
-      fetchTrades();
-      const interval = setInterval(fetchTrades, 60000);
-      return () => clearInterval(interval);
-    }
-  }, [isAuthReady]);
+    fetchTrades();
+    const interval = setInterval(fetchTrades, 60000);
+    return () => clearInterval(interval);
+  }, [token]);
 
   const toggleAssetType = (type) => {
     setAssetType(type);
     setNewTrade({ ticker: '', buy_price: '', quantity: '', total_amount: '' });
   };
 
-  // --- 3. ADD TRADE (NOW SECURED) ---
+  // --- 2. ADD TRADE (SECURED) ---
   const handleAddTrade = async (e) => {
     e.preventDefault();
-    const token = localStorage.getItem('token');
+    if (!token) return;
     
     try {
       let submitTicker = newTrade.ticker;
@@ -98,12 +69,8 @@ const API_URL = 'https://legacy-ledger.onrender.com/api';
 
       const res = await fetch(`${API_URL}/investments`, {
         method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}` // Show VIP pass
-        },
+        headers: authHeaders, // 🔒 Injects JWT
         body: JSON.stringify({
-          // REMOVED user_id (Backend extracts it from the token!)
           asset_symbol: submitTicker,
           entry_price: parseFloat(newTrade.buy_price),
           quantity: submitQuantity
@@ -122,15 +89,15 @@ const API_URL = 'https://legacy-ledger.onrender.com/api';
     }
   };
 
-  // --- 4. DELETE TRADE (NOW SECURED) ---
+  // --- 3. DELETE TRADE (SECURED) ---
   const handleDeleteTrade = async (id) => {
     if (!window.confirm("Liquidate this asset?")) return;
-    const token = localStorage.getItem('token');
+    if (!token) return;
     
     try {
       const res = await fetch(`${API_URL}/investments/${id}`, {
         method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` } // Show VIP pass
+        headers: { 'Authorization': `Bearer ${token}` } // 🔒 Injects JWT
       });
       if (res.ok) {
         setTrades(trades.filter(t => t.id !== id));

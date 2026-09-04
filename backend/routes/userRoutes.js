@@ -1,22 +1,26 @@
 const express = require('express');
 const router = express.Router();
-const db = require('../db'); // This brings in your database connection
+const db = require('../db');
+const authenticateToken = require('../middleware/auth'); // 🔒 Import the security middleware
 
-// Route to create a new user
-router.post('/', async (req, res) => {
+// 1. FETCH ROUTE: Get Current Logged-in User Profile
+router.get('/profile', authenticateToken, async (req, res) => {
     try {
-        const { name, email } = req.body;
+        const userId = req.user.id; // 🔒 Securely pulled from JWT
 
-        // The SQL command to insert a new user and return their data
-        const newUser = await db.query(
-            "INSERT INTO users (name, email) VALUES ($1, $2) RETURNING *",
-            [name, email]
+        // Fetch user details (strictly excluding the password_hash for security)
+        const userResult = await db.query(
+            "SELECT id, email, created_at FROM users WHERE id = $1",
+            [userId]
         );
 
-        // Send the newly created user back as a success response
-        res.status(201).json(newUser.rows[0]);
+        if (userResult.rows.length === 0) {
+            return res.status(404).json({ message: "User not found" });
+        }
+
+        res.json(userResult.rows[0]);
     } catch (err) {
-        console.error(err.message);
+        console.error("Profile Fetch Error:", err.message);
         res.status(500).send("Server Error");
     }
 });
