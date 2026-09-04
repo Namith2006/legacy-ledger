@@ -12,7 +12,11 @@ const Register = () => {
         setError('');
 
         try {
-            const response = await fetch('http://localhost:5000/api/auth/register', {
+           // ❌ OLD:
+// const response = await fetch('http://localhost:5000/api/auth/login', {
+
+// ✅ Change it to this:
+const response = await fetch('https://legacy-ledger.onrender.com/api/auth/register', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email, password })

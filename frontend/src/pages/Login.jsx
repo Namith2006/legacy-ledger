@@ -15,7 +15,7 @@ const Login = () => {
            // ❌ OLD:
 // const response = await fetch('http://localhost:5000/api/auth/login', {
 
-// ✅ NEW:
+// ✅ Change the fetch URL in Login.jsx to:
 const response = await fetch('https://legacy-ledger.onrender.com/api/auth/login', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
