@@ -41,8 +41,8 @@ function App() {
     'Authorization': `Bearer ${token}` // 🔒 Injects the JWT
   };
 
-  // Base API URL (Update this when deploying to production!)
-  const API_URL = 'http://localhost:5000/api';
+  // ✅ NEW:
+const API_URL = 'https://legacy-ledger.onrender.com/api';
 
   // --- Standard States ---
   const [balanceData, setBalanceData] = useState(null);
