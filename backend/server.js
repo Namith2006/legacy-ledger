@@ -73,14 +73,10 @@ const auth = (req, res, next) => {
     }
 };
 
-// --- AUTH ROUTE: DEMO LOGIN ---
-app.post('/api/auth/demo', (req, res) => {
-    const demoUser = { id: 1, name: 'demo' };
-    const token = jwt.sign(demoUser, process.env.JWT_SECRET, { expiresIn: '7d' });
-    res.json({ token, user: demoUser });
-});
+// --- ROUTES ---
+// 🚨 THE FIX: Hooking up your new authentication routes!
+app.use('/api/auth', require('./routes/auth')); 
 
-// Routes
 app.use('/api/users', require('./routes/userRoutes'));
 app.use('/api/transactions', require('./routes/transactionRoutes'));
 app.use('/api/goals', require('./routes/goalRoutes'));
