@@ -16,7 +16,7 @@ const ActiveTrades = () => {
   };
 
   // Base API URL (Set to localhost for testing, change to Render URL for production)
-  const API_URL = '[https://legacy-ledger.onrender.com/api](https://legacy-ledger.onrender.com/api)';
+  const API_URL = 'https://legacy-ledger.onrender.com/api';
 
   // --- 1. FETCH TRADES (SECURED) ---
   const fetchTrades = async () => {
