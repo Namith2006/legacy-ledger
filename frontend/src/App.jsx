@@ -193,6 +193,7 @@ function App() {
   };
 
   // Smart Entry Function
+  // Smart Entry Function
   const handleSmartEntry = async (e) => { 
     e.preventDefault(); 
     if (!smartInput) return; 
@@ -203,7 +204,14 @@ function App() {
         headers: authHeaders, 
         body: JSON.stringify({ rawText: smartInput }) 
       }); 
+      
       const aiResult = await aiResponse.json(); 
+
+      // 🚨 NEW: Check if the backend AI actually succeeded
+      if (!aiResponse.ok) {
+          throw new Error(aiResult.message || aiResult.error || "AI Engine is offline.");
+      }
+
       const ext = aiResult.data; 
       
       const saveResponse = await fetch(`${API_URL}/transactions`, { 
@@ -216,8 +224,13 @@ function App() {
         fetch(`${API_URL}/transactions/balance`, { headers: authHeaders }).then(res => res.json()).then(data => setBalanceData(data)); 
         fetch(`${API_URL}/transactions`, { headers: authHeaders }).then(res => res.json()).then(data => setTransactions(data)); 
         setSmartInput(''); 
-      } 
-    } catch (error) { alert("Error parsing transaction."); } 
+      } else {
+        throw new Error("Failed to save transaction to database.");
+      }
+    } catch (error) { 
+      // 🚨 NEW: Show the actual error message to the user!
+      alert(`Failed: ${error.message}`); 
+    } 
     setIsSmartLoading(false); 
   };
 
