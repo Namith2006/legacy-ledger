@@ -198,10 +198,13 @@ app.post('/api/investments', strictApiLimiter, auth, async (req, res) => {
         }
 
         const newTrade = await db.query(
-            "INSERT INTO active_investments (user_id, asset_name, asset_symbol, entry_price, quantity, target_sell_price, stop_loss_price, status) VALUES ($1, $2, $3, $4, $5, $6, $7, 'HOLDING') RETURNING *",
-            [user_id, cleanSymbol, cleanSymbol, parseFloat(entry_price), parseFloat(quantity), 0, 0]
-        );
-        res.status(201).json(newTrade.rows[0]);
+    `INSERT INTO active_investments 
+    (user_id, asset_name, asset_symbol, entry_price, quantity, target_sell_price, stop_loss_price, status) 
+    VALUES ($1, $2, $3, $4, $5, $6, $7, 'HOLDING') 
+    RETURNING *`,
+    [user_id, cleanSymbol, cleanSymbol, parseFloat(entry_price), parseFloat(quantity), 0, 0]
+);
+res.status(201).json(newTrade.rows[0]);
     } catch (err) {
         console.error("Add Trade Error:", err.message);
         res.status(500).json({ message: "Server Error" });
