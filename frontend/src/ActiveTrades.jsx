@@ -23,9 +23,8 @@ const ActiveTrades = () => {
     if (!token) return;
 
     try {
-      // Assuming your route is mounted at /investments or /trades in server.js
       const res = await fetch(`${API_URL}/investments`, {
-        headers: { 'Authorization': `Bearer ${token}` }
+        headers: authHeaders // 🔒 Standardized headers
       });
       
       if (res.ok) {
@@ -64,12 +63,14 @@ const ActiveTrades = () => {
         submitTicker = 'DIGITALGOLD';
         const totalAmount = parseFloat(newTrade.total_amount);
         const buyRate = parseFloat(newTrade.buy_price);
-        submitQuantity = totalAmount / buyRate; 
+        
+        // 🚨 NEW: Round gold quantity to 4 decimal places for clean database storage
+        submitQuantity = parseFloat((totalAmount / buyRate).toFixed(4)); 
       }
 
       const res = await fetch(`${API_URL}/investments`, {
         method: 'POST',
-        headers: authHeaders, // 🔒 Injects JWT
+        headers: authHeaders, 
         body: JSON.stringify({
           asset_symbol: submitTicker,
           entry_price: parseFloat(newTrade.buy_price),
@@ -97,7 +98,7 @@ const ActiveTrades = () => {
     try {
       const res = await fetch(`${API_URL}/investments/${id}`, {
         method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` } // 🔒 Injects JWT
+        headers: authHeaders 
       });
       if (res.ok) {
         setTrades(trades.filter(t => t.id !== id));
@@ -107,9 +108,9 @@ const ActiveTrades = () => {
     }
   };
 
-  // Portfolio Math
-  const totalInvested = trades.reduce((acc, t) => acc + (parseFloat(t.entry_price) * parseFloat(t.quantity || 1)), 0);
-  const totalCurrent = trades.reduce((acc, t) => acc + (parseFloat(t.live_price) * parseFloat(t.quantity || 1)), 0);
+  // Portfolio Math (Safely parses to avoid NaN errors during load)
+  const totalInvested = trades.reduce((acc, t) => acc + (parseFloat(t.entry_price || 0) * parseFloat(t.quantity || 1)), 0);
+  const totalCurrent = trades.reduce((acc, t) => acc + (parseFloat(t.live_price || 0) * parseFloat(t.quantity || 1)), 0);
   const totalProfit = totalCurrent - totalInvested;
   const totalROI = totalInvested > 0 ? ((totalProfit / totalInvested) * 100).toFixed(2) : 0;
   const isPositiveOverall = totalCurrent >= totalInvested;
@@ -184,8 +185,8 @@ const ActiveTrades = () => {
       ) : trades.length > 0 ? (
         <div style={{ display: 'grid', gap: '15px' }}>
           {trades.map(trade => {
-            const entry = parseFloat(trade.entry_price);
-            const live = parseFloat(trade.live_price);
+            const entry = parseFloat(trade.entry_price || 0);
+            const live = parseFloat(trade.live_price || 0);
             const qty = parseFloat(trade.quantity || 1);
             
             const investedValue = entry * qty;
