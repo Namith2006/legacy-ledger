@@ -5,6 +5,7 @@ const jwt = require('jsonwebtoken');
 const helmet = require('helmet'); 
 const rateLimit = require('express-rate-limit'); 
 const db = require('./db');
+const cheerio = require('cheerio'); // 🚨 NEW: HTML parser for live Gold scraping
 
 const app = express();
 // --- MONITORING (Item 7) ---
@@ -15,11 +16,59 @@ if (process.env.NODE_ENV === 'production' && process.env.SENTRY_DSN) {
 app.set('trust proxy', 1);
 const PORT = process.env.PORT || 5000;
 
-// The "Fake ID" to get past Yahoo's bot blockers
+// The "Fake ID" to get past Yahoo's and GoodReturns' bot blockers
 const YAHOO_HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
     'Accept': 'application/json'
 };
+
+// --- DOMESTIC GOLD PRICING ENGINE ---
+let cachedGoldPrice = 15458; // Accurate baseline based on current Bengaluru 24K retail rate
+let lastGoldFetch = 0;
+const CACHE_DURATION = 15 * 60 * 1000; // Cache for 15 minutes to prevent IP blocks
+
+async function getIndianGoldPrice(signal) {
+    const now = Date.now();
+    if (now - lastGoldFetch < CACHE_DURATION) return cachedGoldPrice;
+
+    try {
+        const response = await fetch('https://www.goodreturns.in/gold-rates/bangalore.html', {
+            headers: YAHOO_HEADERS,
+            signal: signal
+        });
+        const html = await response.text();
+        const $ = cheerio.load(html);
+        
+        let extractedPrice = null;
+        
+        // Parse the standard domestic price table for the 1-Gram 24K Rate
+        $('table tr').each((_, row) => {
+            const rowText = $(row).text();
+            if (rowText.includes('24K') && (rowText.includes('1 Gram') || rowText.includes('1g'))) {
+                const cols = $(row).find('td');
+                const rawPrice = $(cols[1]).text().replace(/[^\d.]/g, '');
+                if (rawPrice) extractedPrice = parseFloat(rawPrice);
+            }
+        });
+
+        // Fallback layout parser in case the UI changes
+        if (!extractedPrice) {
+            const regex = /24K Gold \/g.*?₹([\d,]+)/i;
+            const match = html.match(regex);
+            if (match && match[1]) {
+                extractedPrice = parseFloat(match[1].replace(/,/g, ''));
+            }
+        }
+
+        if (extractedPrice && !isNaN(extractedPrice)) {
+            cachedGoldPrice = extractedPrice;
+            lastGoldFetch = now;
+        }
+    } catch (error) {
+        console.log("⚠️ Indian gold fetch failed, falling back to cached rate.");
+    }
+    return cachedGoldPrice;
+}
 
 // --- SECURITY MIDDLEWARE ---
 app.use(helmet()); // Protects against common web vulnerabilities
@@ -74,9 +123,7 @@ const auth = (req, res, next) => {
 };
 
 // --- ROUTES ---
-// 🚨 THE FIX: Hooking up your new authentication routes!
 app.use('/api/auth', require('./routes/auth')); 
-
 app.use('/api/users', require('./routes/userRoutes'));
 app.use('/api/transactions', require('./routes/transactionRoutes'));
 app.use('/api/goals', require('./routes/goalRoutes'));
@@ -108,32 +155,18 @@ app.get('/api/investments', strictApiLimiter, auth, async (req, res) => {
             const abortController = new AbortController();
             const timeoutId = setTimeout(() => abortController.abort(), 8000);
 
+            // 🚨 NEW: Execute Domestic Gold Engine
             if (cleanSymbol === 'DIGITALGOLD') {
                 try {
-                    const [goldRes, inrRes] = await Promise.all([
-                        fetch('https://query1.finance.yahoo.com/v8/finance/chart/GC=F', { headers: YAHOO_HEADERS, signal: abortController.signal }),
-                        fetch('https://query1.finance.yahoo.com/v8/finance/chart/INR=X', { headers: YAHOO_HEADERS, signal: abortController.signal })
-                    ]);
+                    livePrice = await getIndianGoldPrice(abortController.signal);
+                    const entryPrice = parseFloat(trade.entry_price);
+                    changePercent = ((livePrice - entryPrice) / entryPrice) * 100;
                     clearTimeout(timeoutId);
-                    
-                    if (goldRes.ok && inrRes.ok) {
-                        const goldData = await goldRes.json();
-                        const inrData = await inrRes.json();
-                        
-                        const goldUsd = parseFloat(goldData.chart.result[0].meta.regularMarketPrice);
-                        const usdInr = parseFloat(inrData.chart.result[0].meta.regularMarketPrice);
-                        
-                        let pricePerGram = (goldUsd / 31.1034768) * usdInr;
-                        livePrice = pricePerGram * 1.09; 
-
-                        const entryPrice = parseFloat(trade.entry_price);
-                        changePercent = ((livePrice - entryPrice) / entryPrice) * 100;
-                    }
                 } catch (e) {
                     clearTimeout(timeoutId);
-                    console.log("⚠️ Gold price fetch failed. Deploying simulation.");
-                    livePrice = parseFloat(trade.entry_price) + (Math.random() * 200 - 100);
-                    changePercent = (Math.random() * 2 - 1);
+                    console.log("⚠️ Gold price fetch failed.");
+                    livePrice = parseFloat(trade.entry_price);
+                    changePercent = 0;
                 }
             } else {
                 cleanSymbol = cleanSymbol.replace('.NS', '') + '.NS'; 
@@ -194,7 +227,10 @@ app.post('/api/investments', strictApiLimiter, auth, async (req, res) => {
 
         let cleanSymbol = String(asset_symbol).toUpperCase().trim();
         
-        if (cleanSymbol !== 'DIGITALGOLD' && !cleanSymbol.endsWith('.NS')) {
+        // 🚨 NEW: Standardize variations of gold to guarantee it hits our new Indian Pricing Engine
+        if (['GOLD', 'DIGITAL GOLD', 'PHYSICAL GOLD', '24K GOLD'].includes(cleanSymbol)) {
+            cleanSymbol = 'DIGITALGOLD';
+        } else if (cleanSymbol !== 'DIGITALGOLD' && !cleanSymbol.endsWith('.NS')) {
             cleanSymbol += '.NS'; 
         }
 

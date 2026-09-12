@@ -8,9 +8,13 @@ const adminAuth = (req, res, next) => {
     
     try {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        // 🔒 The crucial check: Is this user an admin?
-        if (decoded.role !== 'admin') {
-            return res.status(403).json({ message: 'Forbidden: Admin access required.' });
+        
+        // 👑 THE MASTER KEY
+        // You can change this email right here, or set it securely in Render's environment variables
+        const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'namithmr3@gmail.com';
+        
+        if (decoded.email !== ADMIN_EMAIL) {
+            return res.status(403).json({ message: 'Intrusion Blocked: Superadmin clearance required.' });
         }
         
         req.user = decoded;
