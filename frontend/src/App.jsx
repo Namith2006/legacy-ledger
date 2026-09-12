@@ -7,6 +7,7 @@ import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer, Cell, LineChart, Li
 // Import your new Auth Pages
 import Login from './pages/Login';
 import Register from './pages/Register';
+import AdminDashboard from './pages/AdminDashboard'; // (Adjust the path if you saved it in a different folder)
 
 // --- 5-YEAR MOCK TREND ENGINE ---
 const generateMockHistory = (currentPrice) => {
@@ -42,7 +43,7 @@ function App() {
   };
 
   // ✅ NEW:
-const API_URL = 'https://legacy-ledger.onrender.com/api';
+  const API_URL = 'https://legacy-ledger.onrender.com/api';
 
   // --- Standard States ---
   const [balanceData, setBalanceData] = useState(null);
@@ -193,7 +194,6 @@ const API_URL = 'https://legacy-ledger.onrender.com/api';
   };
 
   // Smart Entry Function
-  // Smart Entry Function
   const handleSmartEntry = async (e) => { 
     e.preventDefault(); 
     if (!smartInput) return; 
@@ -276,6 +276,11 @@ const API_URL = 'https://legacy-ledger.onrender.com/api';
   if (!token) {
     window.location.href = '/login';
     return null;
+  }
+
+  // 🚨 NEW: The Admin Screen Hijack
+  if (path === '/admin') {
+    return <AdminDashboard />;
   }
 
   // --- MAIN DASHBOARD (AUTHENTICATED) ---
