@@ -23,15 +23,19 @@ router.post('/register', async (req, res) => {
         const salt = await bcrypt.genSalt(10);
         const passwordHash = await bcrypt.hash(password, salt);
 
-        // Insert into database
+        // Insert into database (Now returns 'role' alongside id and email)
         const newUser = await db.query(
-            "INSERT INTO users (email, password_hash) VALUES ($1, $2) RETURNING id, email",
+            "INSERT INTO users (email, password_hash) VALUES ($1, $2) RETURNING id, email, role",
             [email, passwordHash]
         );
 
-        // Generate their JWT
+        // Generate their JWT (Now includes the role in the token payload)
         const token = jwt.sign(
-            { id: newUser.rows[0].id, email: newUser.rows[0].email },
+            { 
+                id: newUser.rows[0].id, 
+                email: newUser.rows[0].email, 
+                role: newUser.rows[0].role 
+            },
             process.env.JWT_SECRET,
             { expiresIn: '24h' }
         );
@@ -67,9 +71,13 @@ router.post('/login', async (req, res) => {
             return res.status(401).json({ message: "Invalid credentials." });
         }
 
-        // Issue token
+        // Issue token (Now includes the role in the token payload)
         const token = jwt.sign(
-            { id: user.id, email: user.email },
+            { 
+                id: user.id, 
+                email: user.email, 
+                role: user.role 
+            },
             process.env.JWT_SECRET,
             { expiresIn: '24h' }
         );
@@ -85,7 +93,7 @@ router.post('/login', async (req, res) => {
 // --- 3. GUEST DEMO MODE (Preserved for Testing) ---
 router.post('/demo', (req, res) => {
     const demoToken = jwt.sign(
-        { id: '00000000-0000-0000-0000-000000000000', role: 'guest' }, // Fallback UUID format
+        { id: '00000000-0000-0000-0000-000000000000', role: 'guest' }, 
         process.env.JWT_SECRET,
         { expiresIn: '1h' }
     );
